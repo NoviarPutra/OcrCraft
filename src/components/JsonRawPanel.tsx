@@ -108,8 +108,8 @@ export function JsonRawPanel({ result, isProcessing }: JsonRawPanelProps) {
 
       {/* Meta Indicators: Confidence, Processing Time, NIK Valid */}
       {result ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Confidence Score */}
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div
             className={`p-3 rounded-xl border flex items-center justify-between ${confidenceColor}`}
           >
@@ -171,8 +171,20 @@ export function JsonRawPanel({ result, isProcessing }: JsonRawPanelProps) {
             </span>
           </div>
         </div>
-      ) : null}
 
+        {/* Info Fallback Badge jika OCR melakukan auto-fallback */}
+          {result.meta.retryFallbackUsed && (
+            <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <strong>Smart Auto-Fallback Aktif:</strong> Hasil optimal diperoleh dengan mode{' '}
+                <span className="font-mono font-bold uppercase">{result.meta.modeUsed?.replace('-', ' ')}</span>.
+              </span>
+              <span className="text-[11px] opacity-80">Fallback Otomatis</span>
+            </div>
+          )}
+        </>
+      ) : null}
       {/* Konten Tab: JSON vs Raw Text */}
       <div className="bg-slate-950 rounded-xl border border-slate-800/80 overflow-hidden flex flex-col min-h-[320px]">
         {isProcessing ? (

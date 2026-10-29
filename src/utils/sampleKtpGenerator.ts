@@ -134,14 +134,13 @@ export async function generateSampleKtpBlob(): Promise<Blob> {
   )
   ctx.stroke()
 
-  const { promise, resolve, reject } = Promise.withResolvers<Blob>()
-  canvas.toBlob((b) => {
-    // Bersihkan ukuran canvas offscreen
-    canvas.width = 0
-    canvas.height = 0
-    if (b) resolve(b)
-    else reject(new Error('Gagal mengekspor sample KTP canvas ke Blob.'))
-  }, 'image/png')
-
-  return promise
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => {
+      // Bersihkan ukuran canvas offscreen
+      canvas.width = 0
+      canvas.height = 0
+      if (b) resolve(b)
+      else reject(new Error('Gagal mengekspor sample KTP canvas ke Blob.'))
+    }, 'image/png')
+  })
 }

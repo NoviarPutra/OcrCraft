@@ -105,7 +105,20 @@ Proyek ini dilengkapi dengan rangkaian pengujian unit menggunakan **Vitest** unt
 npm test
 ```
 
-### 5. Pemeriksaan Tipe TypeScript & Linter
+### 5. Menjalankan Pengujian End-to-End (Playwright E2E)
+Rangkaian pengujian otomatis menyeluruh mencakup validasi keamanan berkas negatif, interaktivitas kanvas & slider, alur OCR & pemetaan form JSON, serta audit anti-memory leak (*zero ObjectURL leak*):
+```bash
+# Menjalankan seluruh skenario E2E di browser Chromium (headless mode)
+npm run test:e2e
+
+# Menjalankan dengan antarmuka interaktif Playwright UI
+npm run test:e2e:ui
+
+# Menjalankan uji integrasi model neural network WASM riil secara lokal:
+TEST_REAL_OCR=true npm run test:e2e
+```
+
+### 6. Pemeriksaan Tipe TypeScript & Linter
 ```bash
 # Validasi tipe data tanpa emit (strict mode)
 npx tsc --noEmit
@@ -114,7 +127,7 @@ npx tsc --noEmit
 npm run lint
 ```
 
-### 6. Build Produksi & Preview
+### 7. Build Produksi & Preview
 ```bash
 # Kompilasi aplikasi ke bundle produksi (dist/)
 npm run build
@@ -130,10 +143,14 @@ npm run preview
 1. **Memuat Gambar KTP**:
    - Klik area unggah berkas atau seret foto KTP ke dalam kotak dropzone.
    - Tersedia tombol **"Muat Sampel KTP Demo"** untuk menguji langsung seluruh fitur tanpa perlu mengunggah foto kartu identitas pribadi.
-2. **Koreksi Rotasi & Filter Preprocessing**:
+2. **Koreksi Rotasi & Pilihan 4 Mode Preprocessing**:
    - Jika foto terbalik atau miring, klik tombol **Putar 90° searah jarum jam** atau **berlawanan arah jarum jam**.
-   - Perhatikan pratinjau berdampingan (**Before: Foto KTP Asli** vs **After: Hasil Canvas Preprocessed**).
-   - Geser **Threshold Slider** (default: `135`) hingga teks identitas berwarna hitam tegas dan motif batik/hologram latar belakang KTP berubah menjadi putih bersih.
+   - Pilih dari **4 Mode Preprocessing** sesuai kondisi foto:
+     1. **Enhanced Grayscale / Soft Contrast (DEFAULT - Rekomendasi)**: Menggunakan formula grayscale khusus peredam cyan e-KTP (`0.05R + 0.45G + 0.50B`) dengan soft contrast stretching (`1.25x`). Menghindari binarisasi kasar agar tepi huruf tetap anti-aliased untuk neural network LSTM Tesseract.
+     2. **Original Color (Downscaled)**: Citra warna asli kamera tanpa manipulasi kanvas (skala proporsional maks 1600px).
+     3. **Adaptive Local Threshold (Bradley-Roth)**: Binarisasi adaptif berbasis Integral Image (`O(1)` per piksel) dengan window lokal (default 31px) dan sensitivitas `T` (default 15%). Menghilangkan bayangan tanpa menggelapkan separuh KTP.
+     4. **Manual Global Threshold**: Binarisasi hitam-putih tegas klasik dengan slider threshold interaktif (80 - 200).
+   - **Smart Auto-Fallback**: Saat menggunakan mode default (Enhanced Grayscale), jika NIK tidak valid atau confidence < 65%, sistem otomatis mencoba fallback ke *Original Color* atau *Adaptive Local Threshold* dan memilih hasil dengan akurasi tertinggi.
 3. **Eksekusi OCR**:
    - Klik tombol **"Ekstrak Teks & Data KTP dengan OCR (Tesseract.js)"**.
    - Pantau indikator progres real-time (inisialisasi WASM -> unduh traineddata -> analisis teks 0-100%).

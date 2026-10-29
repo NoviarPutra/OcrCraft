@@ -15,6 +15,7 @@ const OCR_DIGIT_MAP: Record<string, string> = {
   i: '1',
   ']': '1',
   '[': '1',
+  L: '1',
   Z: '2',
   z: '2',
   E: '3',
@@ -46,28 +47,44 @@ export function correctOcrDigits(rawInput: string): string {
  * Membersihkan prefix label (seperti "Nama :", "NIK :", dll.) dari baris teks
  */
 function cleanLabelPrefix(line: string, labelRegex: RegExp): string {
-  return line.replace(labelRegex, '').replace(/^[:;.,\s-]+/, '').trim()
+  let cleaned = line.replace(labelRegex, '')
+  // Hapus subtitle label bahasa Inggris pada format bilingual e-KTP (misal: / NAME, / ADDRESS, dll.)
+  cleaned = cleaned.replace(
+    /^[\s/]*(name|address|occupation|nationality|religion|sex|blood\s*type|place\s*[/.,\s]*(?:date)?\s*(?:of)?\s*birth|date\s*of\s*birth|place|marital\s*status)\b/i,
+    ''
+  )
+  return cleaned.replace(/^[:;.,\s\-/\\|=]+/, '').trim()
 }
 
 /**
  * Ekstraksi NIK (16 digit) dengan OCR post-correction
  */
 export function extractNik(lines: string[], fullText: string): string {
-  // 1. Coba cari baris yang memuat kata kunci NIK
+  // 1. Coba cari baris yang memuat kata kunci NIK (termasuk variasi OCR: MK, M1K, N1K, N!K)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (/\b(N[I!|1l]K|N1K)\b/i.test(line)) {
+    if (/\b(N[I!|1lL]K|N1K|MK|M1K)\b/i.test(line)) {
       // Ambil sisa teks setelah label NIK
-      const afterLabel = line.replace(/.*?\b(N[I!|1l]K|N1K)\b[:;\s]*/i, '').trim()
+      const afterLabel = line.replace(/.*?\b(N[I!|1lL]K|N1K|MK|M1K)\b[:;\s=5]*/i, '').trim()
       const candidate = correctOcrDigits(afterLabel).replace(/\D/g, '')
-      if (candidate.length >= 16) {
+      if (candidate.length === 16) {
+        return candidate
+      }
+      if (candidate.length > 16) {
+        const validMatch = candidate.match(/([1-9][0-9]{15})/)
+        if (validMatch) return validMatch[1]
         return candidate.slice(0, 16)
       }
 
       // Cek baris berikutnya jika baris ini hanya berisi label NIK
       if (i + 1 < lines.length) {
         const nextLineCandidate = correctOcrDigits(lines[i + 1]).replace(/\D/g, '')
-        if (nextLineCandidate.length >= 16) {
+        if (nextLineCandidate.length === 16) {
+          return nextLineCandidate
+        }
+        if (nextLineCandidate.length > 16) {
+          const match = nextLineCandidate.match(/([1-9][0-9]{15})/)
+          if (match) return match[1]
           return nextLineCandidate.slice(0, 16)
         }
       }
@@ -80,6 +97,10 @@ export function extractNik(lines: string[], fullText: string): string {
     const corrected = correctOcrDigits(word).replace(/\D/g, '')
     if (corrected.length === 16) {
       return corrected
+    }
+    if (corrected.length > 16) {
+      const match = corrected.match(/([1-9][0-9]{15})/)
+      if (match) return match[1]
     }
   }
   // 3. Fallback: Cari deretan 16 digit yang mungkin terpisah spasi atau tanda hubung
@@ -114,12 +135,12 @@ export function extractTempatTanggalLahir(
     if (/(tempat|tgl|tgllahir|lahir)/i.test(line)) {
       rawValue = cleanLabelPrefix(
         line,
-        /.*?(tempat\s*[/&]?\s*tgl\.?\s*lahir|tempat\/tgl\s*lahir|tgl\s*lahir|tempat\s*lahir)/i
+        /.*?(tempat\s*[/.,\s]*(?:tgl|tanggal)?\s*lahir|tgl\s*lahir|tempat\s*lahir|lahir)/i
       )
       if (!rawValue && i + 1 < lines.length) {
         rawValue = lines[i + 1].trim()
       }
-      break
+      if (rawValue) break
     }
   }
 
@@ -168,17 +189,23 @@ export function extractTempatTanggalLahir(
  * Normalisasi format tanggal DD-MM-YYYY dengan OCR post-correction
  */
 export function normalizeDateString(rawDate: string): string {
+  if (!rawDate || !rawDate.trim()) return ''
   // Ganti karakter OCR tertukar pada angka tanggal
   const corrected = correctOcrDigits(rawDate)
   // Cocokkan pola angka 2 digit - 2 digit - 4 digit
-  const match = corrected.match(/(\d{1,2})[\s\-./]+(\d{1,2})[\s\-./]+(\d{4})/)
+  const match = corrected.match(/\b([0-3]?[0-9])[\s\-./]+([0-1]?[0-9])[\s\-./]+((?:19|20)\d{2})\b/)
   if (match) {
     const day = match[1].padStart(2, '0')
     const month = match[2].padStart(2, '0')
     const year = match[3]
     return `${day}-${month}-${year}`
   }
-  return corrected.replace(/[^\d\-/]/g, '').trim()
+  // Pola tanpa delimiter (misal 8 digit berurutan DDMMYYYY)
+  const continuousMatch = corrected.match(/\b([0-3][0-9])([0-1][0-9])((?:19|20)\d{2})\b/)
+  if (continuousMatch) {
+    return `${continuousMatch[1]}-${continuousMatch[2]}-${continuousMatch[3]}`
+  }
+  return ''
 }
 
 /**
@@ -254,15 +281,21 @@ export function extractRtRw(lines: string[], fullText: string): string {
   }
 
   // 3. Fallback scan format XXX/YYY di fullText
-  const fallbackMatch = fullText.match(/\b([0-9a-zA-Z]{1,3})\s*[/]\s*([0-9a-zA-Z]{1,3})\b/)
+  // Pastikan BUKAN bagian dari tanggal lahir DD/MM/YYYY (negatif lookahead tahun 19xx/20xx)
+  const fallbackMatch = fullText.match(
+    /\b([0-9a-zA-Z]{1,3})\s*[/]\s*([0-9a-zA-Z]{1,3})\b(?!\s*[/]\s*(?:19|20)\d{2})/
+  )
   if (fallbackMatch) {
-    const rt = correctOcrDigits(fallbackMatch[1]).replace(/\D/g, '')
-    const rw = correctOcrDigits(fallbackMatch[2]).replace(/\D/g, '')
-    if (rt && rw) {
-      return `${rt.padStart(3, '0')}/${rw.padStart(3, '0')}`
+    const rawLeft = fallbackMatch[1].toUpperCase()
+    const rawRight = fallbackMatch[2].toUpperCase()
+    if (!['RT', 'RW', 'KEL', 'DES', 'KEC'].includes(rawLeft)) {
+      const rt = correctOcrDigits(rawLeft).replace(/\D/g, '')
+      const rw = correctOcrDigits(rawRight).replace(/\D/g, '')
+      if (rt && rw && rt.length <= 3 && rw.length <= 3) {
+        return `${rt.padStart(3, '0')}/${rw.padStart(3, '0')}`
+      }
     }
   }
-
   return ''
 }
 
@@ -335,6 +368,8 @@ export function extractStatusPerkawinan(lines: string[], fullText: string): stri
  * Ekstraksi Kewarganegaraan
  */
 export function extractKewarganegaraan(lines: string[], fullText: string): string {
+  if (!fullText.trim()) return ''
+
   if (/\bWNA\b/i.test(fullText)) return 'WNA'
   if (/\bWNI\b/i.test(fullText)) return 'WNI'
 
@@ -347,7 +382,7 @@ export function extractKewarganegaraan(lines: string[], fullText: string): strin
     }
   }
 
-  return 'WNI' // Default pada e-KTP Indonesia
+  return 'WNI' // Default pada e-KTP Indonesia jika terdeteksi teks
 }
 
 /**
@@ -370,6 +405,39 @@ export function extractNama(lines: string[]): string {
   }
 
   // Fallback: Jika setelah NIK ada baris berhuruf kapital
+  return ''
+}
+
+/**
+ * Ekstraksi Alamat lengkap dengan dukungan multi-line (wrap)
+ * Menangani kasus di mana nomor rumah atau nama dusun berlanjut ke baris kedua
+ * (misal: "JLN SILABERANTI GG KELAPA NO" dilanjutkan "08" atau "DUSUN IX PEKAN BUKIT" dilanjutkan "SELAMAT")
+ */
+export function extractAlamat(lines: string[]): string {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/\balamat\b/i.test(line)) {
+      let val = cleanLabelPrefix(line, /.*?\balamat\b/i).replace(/[:;]+/, '').trim()
+      if (!val && i + 1 < lines.length) {
+        val = lines[i + 1].trim()
+        i++
+      }
+
+      // Periksa apakah baris berikutnya adalah kelanjutan alamat (bukan label KTP baru)
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim()
+        const isNextLabel =
+          /\b(RT|RW|Kel|Desa|Kecamatan|Kec\b|Agama|Status|Pekerjaan|Kewarganegaraan|NIK|Nama|Tempat|Jenis)\b/i.test(
+            nextLine
+          )
+        if (!isNextLabel && nextLine.length > 0 && nextLine.length < 50) {
+          val = `${val} ${nextLine}`.trim()
+        }
+      }
+
+      return val.toUpperCase()
+    }
+  }
   return ''
 }
 
@@ -398,6 +466,241 @@ export function extractFieldByKeyword(
 }
 
 /**
+ * Smart NIK & Date Cross-Validation:
+ * Melakukan validasi silang antara 6 digit tanggal lahir di dalam NIK (DDMMYY)
+ * terhadap field tanggal lahir tertulis (DD-MM-YYYY) dan jenis kelamin.
+ *
+ * Aturan NIK Nasional (UU No. 23/2006):
+ * - Digit 7-8: Tanggal lahir.
+ *   - Laki-laki: 01 s/d 31
+ *   - Perempuan: Tanggal lahir + 40 (41 s/d 71)
+ * - Digit 9-10: Bulan lahir (01 s/d 12)
+ * - Digit 11-12: 2 digit terakhir tahun lahir (YY)
+ *
+ * Logika Rekonsiliasi & Auto-Repair:
+ * 1. Jika NIK valid 16 digit dan tanggal lahir kosong/rusak, ekstrak tanggal lahir & gender dari NIK.
+ * 2. Jika tanggal lahir tertulis valid dan NIK mengalami kesalahan OCR minor (1-2 digit berbeda pada posisi 7-12,
+ *    misal 3<->8, 1<->7, 0<->8, 5<->6), koreksi digit tanggal lahir pada NIK agar NIK kembali valid 100%.
+ * 3. Jika gender kosong, simpulkan dari digit hari NIK (> 40 = PEREMPUAN, <= 31 = LAKI-LAKI).
+ */
+export function crossValidateNikAndDate(
+  nik: string,
+  tanggalLahir: string,
+  jenisKelamin: string,
+  options: { inferMissing?: boolean } = {}
+): {
+  nik: string
+  tanggalLahir: string
+  jenisKelamin: string
+  repaired: boolean
+} {
+  const { inferMissing = false } = options
+  let reconciledNik = nik
+  let reconciledTanggalLahir = tanggalLahir
+  let reconciledJenisKelamin = jenisKelamin
+  let repaired = false
+
+  const isNik16 = /^\d{16}$/.test(reconciledNik)
+
+  if (isNik16) {
+    const rawDay = parseInt(reconciledNik.slice(6, 8), 10)
+    const rawMonth = parseInt(reconciledNik.slice(8, 10), 10)
+    const rawYear2 = reconciledNik.slice(10, 12)
+
+    const isFemaleByNik = rawDay >= 41 && rawDay <= 71
+    const isMaleByNik = rawDay >= 1 && rawDay <= 31
+    const birthDay = isFemaleByNik ? rawDay - 40 : rawDay
+
+    // Inferensi jenis kelamin jika kosong
+    if (!reconciledJenisKelamin) {
+      if (isFemaleByNik) {
+        reconciledJenisKelamin = 'PEREMPUAN'
+        repaired = true
+      } else if (isMaleByNik) {
+        reconciledJenisKelamin = 'LAKI-LAKI'
+        repaired = true
+      }
+    }
+
+    // Cek apakah tanggal lahir tertulis valid DD-MM-YYYY
+    const hasValidWrittenDate = /^\d{2}-\d{2}-\d{4}$/.test(reconciledTanggalLahir)
+
+    // Rekonstruksi tanggal lahir jika kosong dan opsi inferMissing aktif
+    if (!hasValidWrittenDate && inferMissing) {
+      if (birthDay >= 1 && birthDay <= 31 && rawMonth >= 1 && rawMonth <= 12) {
+        const yearInt = parseInt(rawYear2, 10)
+        // e-KTP diterbitkan untuk usia >= 17 tahun
+        const century = yearInt > 26 ? '19' : '20'
+        reconciledTanggalLahir = `${String(birthDay).padStart(2, '0')}-${String(rawMonth).padStart(2, '0')}-${century}${rawYear2}`
+        repaired = true
+      }
+    } else if (hasValidWrittenDate) {
+      // Keduanya ada: Uji kecocokan dan koreksi jika ada disinkronisasi akibat salah baca OCR
+      const tMatch = reconciledTanggalLahir.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+      if (tMatch) {
+        const tDay = parseInt(tMatch[1], 10)
+        const tMonth = parseInt(tMatch[2], 10)
+        const tYear2 = tMatch[3].slice(-2)
+
+        const isFemale = reconciledJenisKelamin === 'PEREMPUAN' || isFemaleByNik
+        const expectedDayCode = isFemale ? tDay + 40 : tDay
+        const expectedDateCode = `${String(expectedDayCode).padStart(2, '0')}${String(tMonth).padStart(2, '0')}${tYear2}`
+        const nikDateCode = reconciledNik.slice(6, 12)
+
+        // Deteksi apakah NIK date code tidak valid menurut UU KTP (hari/bulan mustahil)
+        const isNikDateInvalid =
+          rawDay < 1 ||
+          (rawDay > 31 && rawDay < 41) ||
+          rawDay > 71 ||
+          rawMonth < 1 ||
+          rawMonth > 12
+
+        if (isNikDateInvalid) {
+          // Tanggal di NIK mustahil menurut hukum KTP -> perbaiki dari tanggal lahir tertulis
+          if (tDay >= 1 && tDay <= 31 && tMonth >= 1 && tMonth <= 12) {
+            reconciledNik = reconciledNik.slice(0, 6) + expectedDateCode + reconciledNik.slice(12)
+            repaired = true
+          }
+        } else if (nikDateCode !== expectedDateCode) {
+          // Keduanya memiliki tanggal secara sintaksis valid, tapi berbeda 1 digit (kesalahan tipikal OCR).
+          // Perbaiki NIK jika pola gender konsisten
+          const genderConsistent = (isFemale && rawDay > 40) || (!isFemale && rawDay <= 31)
+          if (genderConsistent) {
+            let diffCount = 0
+            for (let i = 0; i < 6; i++) {
+              if (nikDateCode[i] !== expectedDateCode[i]) diffCount++
+            }
+            if (diffCount === 1) {
+              reconciledNik = reconciledNik.slice(0, 6) + expectedDateCode + reconciledNik.slice(12)
+              repaired = true
+            }
+          }
+        }
+      }
+    }
+  } else if (reconciledNik.length === 16 && !/^\d{16}$/.test(reconciledNik)) {
+    // NIK panjang 16 tapi memuat karakter non-digit: koreksi digit via correctOcrDigits
+    const cleaned = correctOcrDigits(reconciledNik).replace(/\D/g, '')
+    if (cleaned.length === 16) {
+      reconciledNik = cleaned
+      repaired = true
+    }
+  }
+
+  return {
+    nik: reconciledNik,
+    tanggalLahir: reconciledTanggalLahir,
+    jenisKelamin: reconciledJenisKelamin,
+    repaired,
+  }
+}
+
+/**
+ * Menggabungkan hasil ekstraksi dari dua pass OCR (Multi-Pass Fallback Strategy)
+ * Memilih field terbaik, terbersih, dan tervalidasi dari masing-masing pass.
+ */
+export function mergeKtpResults(
+  primary: KtpExtractionResult,
+  secondary: KtpExtractionResult
+): KtpExtractionResult {
+  const mergedData: KtpData = { ...primary.data }
+
+  // 1. Prioritas NIK: pilih yang valid 16 digit
+  const pNikValid = primary.data.nik.length === 16 && /^\d{16}$/.test(primary.data.nik)
+  const sNikValid = secondary.data.nik.length === 16 && /^\d{16}$/.test(secondary.data.nik)
+
+  if (!pNikValid && sNikValid) {
+    mergedData.nik = secondary.data.nik
+  } else if (pNikValid && !sNikValid) {
+    mergedData.nik = primary.data.nik
+  } else if (!pNikValid && !sNikValid) {
+    mergedData.nik =
+      secondary.data.nik.length > primary.data.nik.length ? secondary.data.nik : primary.data.nik
+  }
+
+  // 2. Dictionary-validated fields
+  const standardOptions: Record<string, string[]> = {
+    agama: ['ISLAM', 'KRISTEN', 'KATOLIK', 'HINDU', 'BUDDHA', 'KONGHUCU'],
+    statusPerkawinan: ['BELUM KAWIN', 'KAWIN', 'CERAI HIDUP', 'CERAI MATI'],
+    golonganDarah: ['A', 'B', 'AB', 'O'],
+    jenisKelamin: ['LAKI-LAKI', 'PEREMPUAN'],
+    kewarganegaraan: ['WNI', 'WNA'],
+  }
+
+  for (const [key, validList] of Object.entries(standardOptions)) {
+    const k = key as keyof KtpData
+    const pVal = primary.data[k]
+    const sVal = secondary.data[k]
+    if (validList.includes(sVal) && !validList.includes(pVal)) {
+      mergedData[k] = sVal
+    } else if (!pVal && sVal) {
+      mergedData[k] = sVal
+    }
+  }
+
+  // 3. Format-specific text fields
+  const generalFields: (keyof KtpData)[] = [
+    'nama',
+    'tempatLahir',
+    'tanggalLahir',
+    'alamat',
+    'rtRw',
+    'kelDesa',
+    'kecamatan',
+    'pekerjaan',
+  ]
+
+  for (const k of generalFields) {
+    const pVal = primary.data[k] || ''
+    const sVal = secondary.data[k] || ''
+    if (!pVal && sVal) {
+      mergedData[k] = sVal
+    } else if (pVal && sVal) {
+      if (k === 'tanggalLahir') {
+        const pValidDate = /^\d{2}-\d{2}-\d{4}$/.test(pVal)
+        const sValidDate = /^\d{2}-\d{2}-\d{4}$/.test(sVal)
+        if (!pValidDate && sValidDate) mergedData[k] = sVal
+      } else if (k === 'rtRw') {
+        const pValidRt = /^\d{3}\/\d{3}$/.test(pVal)
+        const sValidRt = /^\d{3}\/\d{3}$/.test(sVal)
+        if (!pValidRt && sValidRt) mergedData[k] = sVal
+      } else {
+        // Bandingkan noise karakter aneh
+        const pNoise = (pVal.match(/[^a-zA-Z0-9\s.,\-/]/g) || []).length
+        const sNoise = (sVal.match(/[^a-zA-Z0-9\s.,\-/]/g) || []).length
+        if (sNoise < pNoise || (sNoise === pNoise && sVal.length > pVal.length)) {
+          mergedData[k] = sVal
+        }
+      }
+    }
+  }
+
+  // 4. Lakukan cross-validation ulang pada hasil gabungan
+  const reconciled = crossValidateNikAndDate(
+    mergedData.nik,
+    mergedData.tanggalLahir,
+    mergedData.jenisKelamin
+  )
+  mergedData.nik = reconciled.nik
+  mergedData.tanggalLahir = reconciled.tanggalLahir
+  mergedData.jenisKelamin = reconciled.jenisKelamin
+
+  const isNikValid = mergedData.nik.length === 16 && /^\d{16}$/.test(mergedData.nik)
+
+  return {
+    meta: {
+      confidence: Math.round(Math.max(primary.meta.confidence, secondary.meta.confidence)),
+      processingTimeMs: primary.meta.processingTimeMs + secondary.meta.processingTimeMs,
+      nikValid: isNikValid,
+      modeUsed: secondary.meta.modeUsed ?? primary.meta.modeUsed,
+      retryFallbackUsed: true,
+    },
+    data: mergedData,
+    rawText: `${primary.rawText}\n\n--- [Multi-Pass Fallback OCR] ---\n\n${secondary.rawText}`,
+  }
+}
+
+/**
  * Parser utama KTP OCR ke Structured JSON
  */
 export function parseKtpText(
@@ -413,7 +716,6 @@ export function parseKtpText(
 
   // 1. Ekstraksi NIK
   const nik = extractNik(lines, normalizedRaw)
-  const isNikValid = nik.length === 16 && /^\d{16}$/.test(nik)
 
   // 2. Ekstraksi Nama
   const nama = extractNama(lines)
@@ -425,7 +727,7 @@ export function parseKtpText(
   const { jenisKelamin, golonganDarah } = extractJenisKelaminGolDarah(lines, normalizedRaw)
 
   // 5. Ekstraksi Alamat
-  const alamat = extractFieldByKeyword(lines, [/\balamat\b/i], /.*?\balamat\b/i)
+  const alamat = extractAlamat(lines)
 
   // 6. Ekstraksi RT/RW
   const rtRw = extractRtRw(lines, normalizedRaw)
@@ -456,18 +758,25 @@ export function parseKtpText(
   // 12. Ekstraksi Kewarganegaraan
   const kewarganegaraan = extractKewarganegaraan(lines, normalizedRaw)
 
+  // 13. Smart NIK & Date Cross-Validation (termasuk aturan wanita +40)
+  const crossValidated = crossValidateNikAndDate(nik, tanggalLahir, jenisKelamin)
+  const finalNik = crossValidated.nik
+  const finalTanggalLahir = crossValidated.tanggalLahir
+  const finalJenisKelamin = crossValidated.jenisKelamin
+  const finalNikValid = finalNik.length === 16 && /^\d{16}$/.test(finalNik)
+
   const meta: KtpMeta = {
     confidence: Math.round(confidence),
     processingTimeMs: Math.round(processingTimeMs),
-    nikValid: isNikValid,
+    nikValid: finalNikValid,
   }
 
   const data: KtpData = {
-    nik,
+    nik: finalNik,
     nama,
     tempatLahir,
-    tanggalLahir,
-    jenisKelamin,
+    tanggalLahir: finalTanggalLahir,
+    jenisKelamin: finalJenisKelamin,
     golonganDarah,
     alamat,
     rtRw,
