@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, Brain, Clock, Cloud, FileText, Layers } from "lucide-react";
+import { ArrowRight, Brain, Clock, Cloud, FileText, Layers, Zap } from "lucide-react";
 import type { DemoVersionItem } from "../../demos/registry";
 
 interface DemoCardProps {
@@ -41,6 +41,14 @@ function getEngineConfig(demoId: string): EngineVisualConfig {
         statusBadge: "bg-purple-500/10 text-purple-400 border-purple-500/30",
         cardBorderHover: "hover:border-purple-500/50 hover:shadow-purple-500/10",
         buttonBg: "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/25",
+      };
+    case "rapidocr-fastapi":
+      return {
+        icon: <Zap className='w-5 h-5 text-cyan-400' />,
+        iconBg: "bg-cyan-500/10 border-cyan-500/20",
+        statusBadge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
+        cardBorderHover: "hover:border-cyan-500/50 hover:shadow-cyan-500/10",
+        buttonBg: "bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/25",
       };
     default:
       return {

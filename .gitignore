@@ -33,3 +33,10 @@ blob-report/
 
 # Local agent state
 .serena/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/

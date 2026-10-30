@@ -99,6 +99,26 @@ npm run dev
 ```
 Aplikasi akan aktif di `http://localhost:5173`. Buka tautan tersebut di peramban Anda.
 
+### 3b. Menjalankan Backend RapidOCR (FastAPI) — Demo 4
+Untuk menjalankan varian **RapidOCR Backend (FastAPI)**:
+```bash
+# 1. Masuk ke direktori backend
+cd backend
+
+# 2. Siapkan virtual environment Python (opsional namun disarankan)
+python3 -m venv venv
+source venv/bin/activate # di Windows: venv\Scripts\activate
+
+# 3. Instalasi dependensi Python
+pip install -r requirements.txt
+
+# 4. Jalankan server FastAPI uvicorn
+uvicorn main:app --reload --port 8000
+```
+Backend akan aktif di `http://localhost:8000` dengan endpoint:
+- `GET /api/health`: Health-check status koneksi server.
+- `POST /api/v1/ocr/extract-ktp`: Endpoint ekstraksi teks e-KTP & bounding box berbasis RapidOCR.
+
 ### 4. Menjalankan Pengujian Unit (Unit Tests)
 Proyek ini dilengkapi dengan rangkaian pengujian unit menggunakan **Vitest** untuk menguji akurasi regex parser, fungsi koreksi digit OCR, dan validator berkas:
 ```bash

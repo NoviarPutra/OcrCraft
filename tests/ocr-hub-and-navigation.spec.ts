@@ -37,8 +37,15 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     await expect(paddleCard).toContainText('Local AI')
     await expect(paddleCard).toContainText('v2.1')
     await expect(paddleCard).toContainText('Coba Demo')
+    // 4. Verifikasi kartu versi RapidOCR Backend (FastAPI)
+    const rapidCard = page.getByTestId('demo-card-rapidocr-fastapi')
+    await expect(rapidCard).toBeVisible()
+    await expect(rapidCard).toContainText('RapidOCR Backend (FastAPI)')
+    await expect(rapidCard).toContainText('High-Speed API')
+    await expect(rapidCard).toContainText('v2.5')
+    await expect(rapidCard).toContainText('Coba Demo')
 
-    // 4. Verifikasi kartu versi roadmap (Roadmap)
+    // 5. Verifikasi kartu versi roadmap (Roadmap)
     const hybridCard = page.getByTestId('demo-card-serverless-hybrid-gateway')
     await expect(hybridCard).toBeVisible()
     await expect(hybridCard).toContainText('Serverless Hybrid Gateway')
@@ -122,6 +129,20 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     await expect(page.getByRole('heading', { name: /Eksplorasi Teknologi OCR/i })).toBeVisible()
   })
 
+  test('4b. Navigasi Masuk & Keluar RapidOCR FastAPI Workspace', async ({ page }) => {
+    await page.goto('/')
+    const rapidCard = page.getByTestId('demo-card-rapidocr-fastapi')
+    await rapidCard.click()
+
+    // Verifikasi masuk ke Workspace RapidOCR
+    await expect(page.getByText('RapidOCR Backend (FastAPI)')).toBeVisible()
+    await expect(page.getByText('FastAPI Server')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Test/i })).toBeVisible()
+
+    // Klik kembali ke hub
+    await page.getByTestId('back-to-hub-btn').click()
+    await expect(page.getByRole('heading', { name: /Eksplorasi Teknologi OCR/i })).toBeVisible()
+  })
   test('5. Tampilan Responsif Mobile & Desktop (Zero Overflow & Touch Target >= 44px)', async ({
     page,
   }) => {
@@ -131,7 +152,7 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
 
     // Cek header dan status indicator
     await expect(page.getByRole('heading', { name: 'OcrCraft Studio' })).toBeVisible()
-    await expect(page.getByText('3 Versi Demo Tersedia')).toBeVisible()
+    await expect(page.getByText('4 Versi Demo Tersedia')).toBeVisible()
     await expect(
       page.getByText(/Pilih arsitektur engine OCR kependudukan e-KTP berbasis browser/i)
     ).toBeVisible()
@@ -154,7 +175,7 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     // --- 2. Verifikasi Desktop Viewport (1280px) ---
     await page.setViewportSize({ width: 1280, height: 720 })
     await expect(page.getByRole('heading', { name: 'OcrCraft Studio' })).toBeVisible()
-    await expect(page.getByText('3 Versi Demo Tersedia')).toBeVisible()
+    await expect(page.getByText('4 Versi Demo Tersedia')).toBeVisible()
 
     const hasDesktopOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth

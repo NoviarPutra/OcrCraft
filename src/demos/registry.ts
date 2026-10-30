@@ -73,6 +73,26 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
     isAvailable: true,
   },
   {
+    id: 'rapidocr-fastapi',
+    title: 'RapidOCR Backend (FastAPI)',
+    version: 'v2.5',
+    status: 'beta',
+    badge: 'High-Speed API',
+    description:
+      'Ekstraksi e-KTP berkecepatan tinggi menggunakan RapidOCR (PaddleOCR berbasis C++/Python ONNXRuntime) di backend FastAPI dengan latensi <150ms.',
+    features: [
+      'High-Speed RapidOCR Engine (ONNXRuntime C++ Backend)',
+      'FastAPI REST Endpoint dengan Multipart Image Upload',
+      'Sub-200ms Inference Latency Profile (Det + Rec Profiling)',
+      'Interactive BBox Visualization Canvas Overlay',
+      'Smart NIK Typo Correction & DOB Cross-Validation (+40 Wanita)',
+      'Structured JSON & Multi-Tab Results Panel (JSON, Raw, Form)',
+    ],
+    keyCapabilities: ['High-Speed API', 'ONNX C++', 'FastAPI Server'],
+    engine: 'RapidOCR (C++/ONNX) + FastAPI Python Backend',
+    isAvailable: true,
+  },
+  {
     id: 'serverless-hybrid-gateway',
     title: 'Serverless Hybrid Gateway',
     version: 'v3.0',

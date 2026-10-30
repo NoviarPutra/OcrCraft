@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DemoHub } from './components/hub/DemoHub'
 import { ByokVisionWorkspace } from './components/workspace/byok/ByokVisionWorkspace'
 import { PaddleOcrWorkspace } from './components/workspace/paddle/PaddleOcrWorkspace'
+import { RapidOcrWorkspace } from './components/workspace/rapid/RapidOcrWorkspace'
 import { TesseractWorkspace } from './components/workspace/TesseractWorkspace'
 
 export type AppView = 'hub' | 'workspace'
@@ -27,6 +28,8 @@ export function App() {
         <ByokVisionWorkspace onBackToHub={handleBackToHub} />
       ) : selectedDemoId === 'paddleocr-onnx' ? (
         <PaddleOcrWorkspace onBackToHub={handleBackToHub} />
+      ) : selectedDemoId === 'rapidocr-fastapi' ? (
+        <RapidOcrWorkspace onBackToHub={handleBackToHub} />
       ) : (
         <TesseractWorkspace onBackToHub={handleBackToHub} />
       )}
