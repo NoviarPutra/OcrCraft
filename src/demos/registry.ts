@@ -6,6 +6,7 @@ export interface DemoVersionItem {
   badge: string
   description: string
   features: string[]
+  keyCapabilities: string[]
   engine: string
   isAvailable: boolean
 }
@@ -27,6 +28,7 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
       'Simulasi Auto-Fill Form & JSON Extractor',
       'Zero-Leak Lifecycle Teardown',
     ],
+    keyCapabilities: ['Zero-Backend', 'Canvas Preprocessing', 'WASM Tesseract'],
     engine: 'Tesseract.js WASM + HTML5 Canvas API',
     isAvailable: true,
   },
@@ -35,9 +37,9 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
     title: 'BYOK Vision OCR (OpenAI-Compatible)',
     version: 'v2.0',
     status: 'beta',
-    badge: 'Baru / BYOK Vision',
+    badge: 'Cloud API',
     description:
-      'Ekstraksi e-KTP presisi tinggi berbasis multimodal LLM dengan menghubungkan API Key Anda sendiri (OpenAI, OpenRouter, Groq, Ollama, LiteLLM) langsung dari browser tanpa perantara server.',
+      'Ekstraksi e-KTP presisi tinggi berbasis multimodal LLM dengan menghubungkan API Key Anda sendiri langsung dari browser tanpa perantara server.',
     features: [
       'Dukungan Multi-Provider (OpenAI, OpenRouter, Groq, Ollama/vLLM)',
       'Client-Side Pre-Flight Image Compression (Safe Resize JPEG 0.85)',
@@ -46,6 +48,7 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
       'Customizable System Prompt & Response Format Auto-Fallback',
       'Zero Storage Leaks — API Key hanya di Memori / SessionStorage',
     ],
+    keyCapabilities: ['Vision LLM', 'Multi-Provider', 'Zero Storage'],
     engine: 'OpenAI-Compatible Vision API + HTML5 Canvas Pre-Flight',
     isAvailable: true,
   },
@@ -54,9 +57,9 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
     title: 'PaddleOCR ONNX (Local Neural Engine)',
     version: 'v2.1',
     status: 'beta',
-    badge: 'Baru / Local Neural',
+    badge: 'Local AI',
     description:
-      'Ekstraksi deep learning e-KTP 100% di browser tanpa perantara server menggunakan pipeline 2-tahap: Text Detection DBNet + Text Recognition CRNN/SVTR dengan akselerasi WebAssembly SIMD dan WebGPU.',
+      'Ekstraksi deep learning e-KTP 100% di browser secara lokal menggunakan pipeline DBNet detection dan SVTR recognition dengan akselerasi WASM & WebGPU.',
     features: [
       'Text Detection DBNet (ResNet-18 / MobileNet FP32)',
       'Text Recognition CRNN / SVTR + CTC Greedy Decoder',
@@ -65,6 +68,7 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
       'Interactive Bounding-Box Overlay & Confidence Heatmap',
       'Spatial & Heuristic KTP Field Extraction (+40 Disambiguasi)',
     ],
+    keyCapabilities: ['Local AI', 'ONNX WebGPU/WASM', 'BBox Spatial Sort'],
     engine: 'ONNX Runtime Web (WASM SIMD / WebGPU) + HTML5 Canvas',
     isAvailable: true,
   },
@@ -75,13 +79,14 @@ export const DEMO_VERSIONS: DemoVersionItem[] = [
     status: 'roadmap',
     badge: 'Roadmap',
     description:
-      'Pipeline hybrid zero-logging: validasi crop dan checksum NIK di sisi klien sebelum dikirim ke inference microservices terenkripsi untuk akurasi skala enterprise 99.8%.',
+      'Pipeline hybrid zero-logging: validasi crop dan checksum NIK di sisi klien sebelum dikirim ke inference microservices terenkripsi untuk akurasi enterprise.',
     features: [
       'Zero-Persistence End-to-End Encryption',
       'Dual Checksum & Dukcapil Hash Matching',
       'Fallback ke Cloud GPU Vision Clusters',
       'Audit Trail Kepatuhan PDP / GDPR',
     ],
+    keyCapabilities: ['Edge AI Workers', 'Fallback Gateway', 'Zero Cold-Start'],
     engine: 'Cloudflare Workers + gRPC Edge Inference',
     isAvailable: false,
   },

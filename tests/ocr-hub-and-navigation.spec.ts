@@ -29,15 +29,14 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     await expect(tesseractCard).toContainText('Client-Side Tesseract OCR')
     await expect(tesseractCard).toContainText('Stable')
     await expect(tesseractCard).toContainText('v1.0')
-    await expect(tesseractCard).toContainText('Buka Workspace Demo')
-
+    await expect(tesseractCard).toContainText('Coba Demo')
     // 3. Verifikasi kartu versi PaddleOCR ONNX (Local Neural Engine)
     const paddleCard = page.getByTestId('demo-card-paddleocr-onnx')
     await expect(paddleCard).toBeVisible()
     await expect(paddleCard).toContainText('PaddleOCR ONNX (Local Neural Engine)')
-    await expect(paddleCard).toContainText('Baru / Local Neural')
+    await expect(paddleCard).toContainText('Local AI')
     await expect(paddleCard).toContainText('v2.1')
-    await expect(paddleCard).toContainText('Buka Workspace Demo')
+    await expect(paddleCard).toContainText('Coba Demo')
 
     // 4. Verifikasi kartu versi roadmap (Roadmap)
     const hybridCard = page.getByTestId('demo-card-serverless-hybrid-gateway')
@@ -121,5 +120,45 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     // Klik kembali ke hub
     await page.getByTestId('back-to-hub-btn').click()
     await expect(page.getByRole('heading', { name: /Eksplorasi Teknologi OCR/i })).toBeVisible()
+  })
+
+  test('5. Tampilan Responsif Mobile & Desktop (Zero Overflow & Touch Target >= 44px)', async ({
+    page,
+  }) => {
+    // --- 1. Verifikasi Mobile Viewport (iPhone SE / 375px) ---
+    await page.setViewportSize({ width: 375, height: 667 })
+    await page.goto('/')
+
+    // Cek header dan status indicator
+    await expect(page.getByRole('heading', { name: 'OcrCraft Studio' })).toBeVisible()
+    await expect(page.getByText('3 Versi Demo Tersedia')).toBeVisible()
+    await expect(
+      page.getByText(/Pilih arsitektur engine OCR kependudukan e-KTP berbasis browser/i)
+    ).toBeVisible()
+
+    // Pastikan tidak ada horizontal overflow di mobile
+    const hasHorizontalOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth
+    })
+    expect(hasHorizontalOverflow).toBe(false)
+
+    // Verifikasi touch target minimal 44px pada tombol aksi kartu
+    const tesseractCard = page.getByTestId('demo-card-client-side-tesseract')
+    const tryDemoBtn = tesseractCard.getByRole('button', { name: /Coba Demo/i })
+    const box = await tryDemoBtn.boundingBox()
+    expect(box).not.toBeNull()
+    if (box) {
+      expect(box.height).toBeGreaterThanOrEqual(44)
+    }
+
+    // --- 2. Verifikasi Desktop Viewport (1280px) ---
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await expect(page.getByRole('heading', { name: 'OcrCraft Studio' })).toBeVisible()
+    await expect(page.getByText('3 Versi Demo Tersedia')).toBeVisible()
+
+    const hasDesktopOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth
+    })
+    expect(hasDesktopOverflow).toBe(false)
   })
 })

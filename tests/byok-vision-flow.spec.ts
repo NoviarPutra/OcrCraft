@@ -14,9 +14,9 @@ test.describe('BYOK Vision OCR Hub & Studio E2E Suite', () => {
     const byokCard = page.getByTestId('demo-card-byok-vision-ocr')
     await expect(byokCard).toBeVisible()
     await expect(byokCard).toContainText('BYOK Vision OCR (OpenAI-Compatible)')
-    await expect(byokCard).toContainText('Baru / BYOK Vision')
+    await expect(byokCard).toContainText('Cloud API')
     await expect(byokCard).toContainText('v2.0')
-    await expect(byokCard).toContainText('Buka Workspace Demo')
+    await expect(byokCard).toContainText('Coba Demo')
 
     // 2. Klik kartu untuk membuka Workspace v2
     await byokCard.click()
