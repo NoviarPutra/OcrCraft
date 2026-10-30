@@ -1,294 +1,321 @@
-# Client-Side KTP OCR & JSON Extractor
+# OcrCraft Studio
 
-Aplikasi web demonstrasi **KTP (Kartu Tanda Penduduk) OCR & JSON Extractor** yang berjalan **100% di sisi klien (browser-only)** menggunakan **React 19**, **Vite 8**, **TypeScript**, **Tailwind CSS v4**, dan **Tesseract.js v7**.
+### Multi-Version OCR Sandbox & Identity Document Parser
 
-Aplikasi ini tidak memiliki dependensi server backend (*zero-backend*). Seluruh proses—mulai dari pembacaan berkas gambar, manipulasi piksel kanvas, inisialisasi WebAssembly (WASM), inferensi pengenalan karakter, hingga pemetaan ke skema JSON terstruktur—dieksekusi langsung di dalam peramban pengguna. Tidak ada data kependudukan atau berkas foto KTP yang dikirim ke jaringan internet, memastikan privasi data terjaga penuh sesuai prinsip pelindungan data pribadi (UU PDP).
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x%20%7C%207.x-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-19.3-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8.3-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.3-38B2AC?logo=tailwindcss&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-114%20passed-green?logo=vitest&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-E2E%20Ready-orange?logo=playwright&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 ---
 
-## Alur Kerja & Arsitektur
+## 1. Tentang Proyek (Overview)
 
+**OcrCraft Studio** adalah platform *sandbox* modular dan laboratorium komparasi OCR yang dirancang khusus untuk mengekstraksi, memvalidasi, dan menormalisasi data dokumen identitas **e-KTP (Kartu Tanda Penduduk) Republik Indonesia** ke dalam format data terstruktur JSON yang siap pakai.
+
+Aplikasi ini mengintegrasikan **empat varian arsitektur OCR yang berbeda** dalam satu antarmuka terpadu:
+1. **Client-Side WASM Engine** (privasi total tanpa transmisi jaringan).
+2. **Bring Your Own Key (BYOK) Cloud Vision LLM** (koneksi langsung browser ke model multimodal via OpenAI-compatible API).
+3. **Local Deep Learning Engine** (inferensi model ONNX 2-tahap langsung di browser via WebGPU/WASM).
+4. **High-Speed Python Backend API** (arsitektur microservice berbasis FastAPI dan RapidOCR C++/ONNX).
+
+Setiap engine dilengkapi dengan modul pasca-pemrosesan (*post-processing*) cerdas, mencakup perbaikan kesalahan karakter numerik KTP, normalisasi tanggal lahir dan kode wilayah NIK (termasuk aturan disambiguasi `+40` untuk tanggal lahir perempuan), penyortiran spasial urutan baca, visualisasi *bounding box*, dan simulasi *auto-fill form*.
+
+---
+
+## 2. Arsitektur & Varian Demo yang Tersedia
+
+| Aspek | v1: Client-Side Tesseract | v2: BYOK Vision OCR | v3: PaddleOCR ONNX | v4: RapidOCR Backend |
+| :--- | :--- | :--- | :--- | :--- |
+| **Lingkungan Eksekusi** | Browser (Web Worker + WASM) | Cloud Vision API (Browser Direct) | Browser (WASM SIMD / WebGPU) | Dedicated Python Service (FastAPI) |
+| **Engine Inti** | Tesseract.js v7 (`ind.traineddata`) | Multimodal LLM (GPT-4o, Claude, dll.) | `onnxruntime-web` (DBNet + SVTR) | RapidOCR (C++ ONNXRuntime) |
+| **Tingkat Privasi** | **100% Luring (Zero Network)** | Kunci & Gambar Langsung ke Provider | **100% Luring (Zero Network)** | Intranet / Server Terkendali |
+| **Estimasi Latensi** | ~1.5s – 3.5s (Tergantung CPU) | ~1.0s – 2.5s (Tergantung Jaringan) | ~800ms – 2.0s (WebGPU Accelerated) | **< 150ms – 200ms** (High Throughput) |
+| **Visual Bounding Box** | Tidak (Teks Baris Heuristik) | Tidak (Ekstraksi JSON Semantik) | **Ya (Overlay Kanvas Interaktif)** | **Ya (Overlay Kanvas Interaktif)** |
+| **Kebutuhan Backend** | Tidak Ada (*Zero-Backend*) | Tidak Ada (*Direct Client-to-API*) | Tidak Ada (*Model Cached via IDB*) | Python 3.10+ & Uvicorn |
+
+---
+
+### Detail Varian Demo
+
+#### v1: Client-Side Tesseract OCR (v1.0 - Stable)
+- **Karakteristik Utama**: Berjalan 100% di browser pengguna tanpa dependensi server (*zero-backend*). Memenuhi standar regulasi Pelindungan Data Pribadi (UU PDP).
+- **Pipeline Pemrosesan**:
+  1. *Input Validation*: Pengecekan ukuran berkas (maks. 10 MB) dan format gambar (JPEG, PNG, WebP).
+  2. *HTML5 Canvas Preprocessing*: *Downscaling* proporsional (lebar maks 1600px), rotasi manual (90°/180°/270°), *chroma-bleaching* tertimbang (meredam kanal biru/cyan latar e-KTP), penajaman kontras teks, dan binarisasi *threshold* adaptif.
+  3. *Tesseract.js Web Worker*: Eksekusi modul WebAssembly bahasa Indonesia (`ind`) pada *worker thread* terisolasi tanpa memblokir UI antarmuka.
+  4. *Heuristic Regex Parser*: Pembersihan karakter rancu (O/D $\rightarrow$ 0, I/l $\rightarrow$ 1, S $\rightarrow$ 5, B $\rightarrow$ 8), validasi 16 digit NIK, dan pemetaan ke skema JSON.
+
+#### v2: BYOK Vision OCR (OpenAI-Compatible) (v2.0 - Beta)
+- **Karakteristik Utama**: Ekstraksi berbasis AI multimodal dengan konsep *Bring Your Own Key* (BYOK). Menghubungkan langsung browser pengguna ke penyedia LLM vision (OpenAI GPT-4o, Groq, Ollama, OpenRouter, vLLM, DeepSeek) tanpa server perantara yang menyimpan *credential*.
+- **Fitur Khusus**:
+  1. *Secure Storage*: Konfigurasi disimpan di `localStorage` peramban (`ocrcraft:byok:providers:v1`). Jika opsi persistensi dinonaktifkan (`persistApiKey: false`), API Key tidak ditulis ke penyimpanan disk dan hanya berada di memori aktif sesi.
+  2. *Pre-Flight Probe*: Fitur tes koneksi (`testProviderConnection`) untuk memvalidasi endpoint, token autentikasi, ketersediaan model, serta latensi *roundtrip* jaringan.
+  3. *Local CORS Proxy*: Dilengkapi middleware Vite (`/api/byok-proxy`) untuk meneruskan permintaan ke endpoint lokal (misal: Ollama pada `localhost:11434`) tanpa terhalang kebijakan CORS peramban.
+  4. *Client-Side Image Optimization*: Kompresi otomatis berbasis kanvas (downscale ke maks 1280px dan kompresi JPEG 82%) guna menghemat kuota token model vision.
+  5. *Robust Schema Parser*: Membersihkan output LLM dari blok markdown (````json...````) atau teks naratif menjadi objek JSON tervalidasi.
+
+#### v3: PaddleOCR ONNX (Local Neural Engine) (v2.1 - Beta)
+- **Karakteristik Utama**: Inferensi *deep learning* 2-tahap (Text Detection + Text Recognition) yang berjalan sepenuhnya di sisi klien menggunakan model ONNX via `onnxruntime-web`.
+- **Fitur Khusus**:
+  1. *Dual-Stage Pipeline*: Deteksi teks menggunakan model **DBNet** dan pengenalan teks menggunakan **SVTR/CRNN**.
+  2. *Hardware Acceleration*: Mendukung backend WebAssembly (WASM SIMD multi-threaded) dan akselerasi GPU lokal melalui WebGPU.
+  3. *Model Cache Manager*: Menyimpan bobot model ONNX secara lokal di **IndexedDB** peramban untuk mencegah unduhan ulang saat aplikasi dibuka kembali.
+  4. *CTC Decoding & Spatial Sorting*: Algoritma rekonstruksi tata letak teks (*reading order*) berdasarkan koordinat spasial poligon kotak deteksi (*bounding box*).
+  5. *Interactive Canvas*: Visualisasi poligon kotak deteksi di atas kanvas dengan fitur interaktif untuk melihat teks dan nilai keyakinan (*confidence score*) per area.
+
+#### v4: RapidOCR Backend (FastAPI) (v2.5 - Beta)
+- **Karakteristik Utama**: Layanan mikro berkecepatan tinggi yang mengeksekusi RapidOCR (kompilasi C++/ONNXRuntime) melalui backend Python berbasis FastAPI.
+- **Fitur Khusus**:
+  1. *Sub-200ms Latency*: Pemrosesan inferensi berkecepatan tinggi dengan profil waktu terperinci (*detection time*, *recognition time*, dan *total roundtrip*).
+  2. *REST API Endpoint*: Endpoint `POST /api/v1/ocr/extract-ktp` menerima muatan gambar *multipart/form-data*, menjalankan validasi dimensi, dan mengembalikan koordinat *bounding box*, teks baris, serta skor probabilitas.
+  3. *Full-Featured Workspace*: Visualisasi *bounding box* langsung di frontend, panel perbandingan *side-by-side*, tab hasil terstruktur (JSON, Teks Mentah, dan Formulir e-KTP).
+
+---
+
+## 3. Struktur Direktori Proyek (Project Structure)
+
+```text
+client-side-ocr/
+├── backend/                        # Layanan Python FastAPI OCR Backend
+│   ├── main.py                     # Definisi API, CORS, dan integrasi RapidOCR
+│   └── requirements.txt            # Dependensi Python (FastAPI, RapidOCR, NumPy, Pillow)
+├── scripts/
+│   └── dev-backend.js              # Runner otomatis backend (deteksi Python, auto-venv, & uvicorn)
+├── src/
+│   ├── components/                 # Komponen Antarmuka Pengguna (UI)
+│   │   ├── hub/                    # Demo Hub selector antarmuka utama
+│   │   │   ├── DemoHub.tsx         # Dashboard katalog varian demo
+│   │   │   └── DemoCard.tsx        # Kartu navigasi demo
+│   │   └── workspace/              # Ruang kerja ekstraksi OCR per engine
+│   │       ├── TesseractWorkspace.tsx   # Workspace Demo v1 (Tesseract.js)
+│   │       ├── byok/                    # Workspace Demo v2 (BYOK Vision LLM)
+│   │       │   ├── ByokVisionWorkspace.tsx
+│   │       │   └── ByokSettingsDrawer.tsx
+│   │       ├── paddle/                  # Workspace Demo v3 (PaddleOCR ONNX)
+│   │       │   ├── PaddleOcrWorkspace.tsx
+│   │       │   ├── InteractiveBoundingCanvas.tsx
+│   │       │   ├── PaddleControlPanel.tsx
+│   │       │   └── PaddleResultsPanel.tsx
+│   │       └── rapid/                   # Workspace Demo v4 (RapidOCR FastAPI)
+│   │           ├── RapidOcrWorkspace.tsx
+│   │           ├── RapidControlPanel.tsx
+│   │           └── RapidResultsPanel.tsx
+│   ├── demos/
+│   │   └── registry.ts             # Registrasi metadata, kemampuan, dan rute demo
+│   ├── hooks/                      # React Custom Hooks
+│   │   ├── useKtpOcr.ts            # State machine & lifecycle worker Tesseract
+│   │   ├── useByokVision.ts        # State machine pemanggilan API Vision LLM
+│   │   └── useByokProviders.ts     # Manajemen persistensi provider & API key
+│   ├── types/                      # Deklarasi tipe TypeScript (KTP, BYOK, PaddleOCR)
+│   │   ├── ktp.ts
+│   │   ├── byok.ts
+│   │   └── paddleOcr.ts
+│   └── utils/                      # Algoritma Parser, Transformasi & Utilitas
+│       ├── ktpParser.ts            # Parser heuristik reguler untuk Tesseract
+│       ├── rapidKtpParser.ts       # Parser data spasial & validasi NIK RapidOCR
+│       ├── paddleKtpParser.ts      # Parser data spasial PaddleOCR
+│       ├── spatialSorter.ts        # Algoritma pengurutan posisi koordinat teks
+│       ├── ctcDecoder.ts           # Logika decode probabilitas Connectionist Temporal Classification
+│       ├── modelCacheManager.ts    # Penyimpanan model ONNX ke IndexedDB
+│       ├── imagePreprocessor.ts    # Manipulasi piksel kanvas (binarisasi, bleaching, rotasi)
+│       ├── byokResponseParser.ts   # Pembersihan dan sanitasi output JSON LLM
+│       ├── byokImageOptimizer.ts   # Kompresi & downscale payload gambar ke LLM
+│       └── testProviderConnection.ts # Health check & latensi probe provider LLM
+├── tests/                          # Automated Test Suites
+│   ├── fixtures/                   # Gambar sampel pengujian e-KTP
+│   ├── helpers/                    # Mock Tesseract & deteksi kebocoran memori
+│   ├── ktp-ocr-pipeline.spec.ts    # Playwright E2E: Pipeline Tesseract
+│   ├── ktp-ocr-portal.spec.ts      # Playwright E2E: Tampilan Portal
+│   ├── byok-vision-flow.spec.ts    # Playwright E2E: Alur BYOK Vision
+│   └── ocr-hub-and-navigation.spec.ts # Playwright E2E: Navigasi Hub
+├── playwright.config.ts            # Konfigurasi pengujian E2E Playwright
+├── vite.config.ts                  # Konfigurasi bundler Vite 8 & Tailwind CSS v4
+└── package.json                    # Konfigurasi dependensi dan skrip proyek
 ```
-[ Berkas Foto KTP ]
-         │
-         ▼
-[ 1. Validasi Input ] ────────► Tolak jika > 10 MB, 0 Byte, atau MIME/Ekstensi tidak valid
-         │
-         ▼
-[ 2. HTML5 Canvas Preprocessor ]
-   ├─ Safe Downscaling (lebar maksimal 1600px proporsional)
-   ├─ Rotasi 90° / 180° / 270° (koreksi foto miring/terbalik)
-   ├─ Grayscale Tertimbang (meredam kanal biru/cyan latar e-KTP)
-   ├─ Contrast Enhancement (menaikkan kontras teks hitam)
-   └─ Binarization / Thresholding (Slider interaktif 80 - 200)
-         │
-         ▼
-[ 3. Tesseract.js Web Worker ] ──► Engine OCR WASM (Bahasa Indonesia: 'ind')
-         │
-         ▼
-[ 4. Heuristic Post-Correction & Parser ]
-   ├─ Koreksi karakter salah baca numerik (O/D->0, I/l->1, S->5, B->8, dsb.)
-   ├─ Regex matching bertingkat untuk NIK, Tanggal Lahir, RT/RW, Alamat
-   └─ Pemetaan ke Target Skema JSON KTP
-         │
-         ▼
-[ 5. Tampilan 3 Panel & Form Auto-Fill ]
-   ├─ Panel 1: Pratinjau Before vs After & Kontrol Threshold/Rotasi
-   ├─ Panel 2: Hasil Structured JSON, Confidence Score, & Raw Text
-   ├─ Panel 3: Simulasi Auto-Fill Form (Highlight kuning jika NIK < 16 digit)
-   └─ Pembersihan Memori Otomatis (revokeObjectURL, canvas zeroing, worker cleanup)
-```
 
 ---
 
-## Prasyarat & Lingkungan
+## 4. Cara Instalasi & Menjalankan Proyek (Getting Started)
 
-### 1. Kebutuhan Sistem
-- **Node.js**: Versi `18.x` atau lebih baru (direkomendasikan LTS `20.x` / `22.x`).
-- **Package Manager**: `npm` versi `9+` atau `bun` versi `1.2+`.
-
-### 2. Kebutuhan Browser
-Aplikasi membutuhkan peramban modern yang mendukung:
-- **WebAssembly (WASM)** untuk eksekusi core Tesseract C++.
-- **Web Workers** untuk memproses OCR di latar belakang tanpa membekukan thread antarmuka (UI).
-- **HTML5 Canvas 2D Context** (`getImageData` dan `putImageData`) untuk filter piksel anti-noise.
-- *Peramban yang didukung*: Google Chrome/Chromium 80+, Mozilla Firefox 78+, Microsoft Edge 80+, Apple Safari 14+.
-
-### 3. Data Model Bahasa Tesseract (`ind.traineddata`)
-- **Mode Daring (Default)**: Saat proses OCR dijalankan pertama kali, `tesseract.js` akan secara otomatis mengunduh berkas model bahasa Indonesia (`ind.traineddata.gz`, ~2-3 MB) dari CDN resmi (jsDelivr) dan menyimpannya secara persisten di **IndexedDB** browser. Eksekusi berikutnya akan membaca langsung dari *cache* lokal tanpa mengunduh ulang.
-- **Mode Luring Penuh (Air-Gapped / Offline Setup)**:
-  Jika aplikasi hendak dijalankan pada jaringan tertutup (*intranet / air-gapped*):
-  1. Unduh model bahasa Indonesia dari repositori Naptha Tesseract:
-     ```bash
-     curl -L -o public/tessdata/ind.traineddata.gz https://github.com/naptha/tessdata/raw/gh-pages/4.0.0_fast/ind.traineddata.gz
-     ```
-  2. Buka `src/hooks/useKtpOcr.ts` dan tambahkan opsi `langPath` pada konfigurasi `createWorker`:
-     ```ts
-     const worker = await createWorker('ind', 1, {
-       langPath: '/tessdata',
-       gzip: true,
-       // ...
-     })
-     ```
-
-### 4. Kriteria Foto KTP yang Optimal
-- **Format Berkas**: `image/jpeg` (`.jpg`, `.jpeg`), `image/png` (`.png`), atau `image/webp` (`.webp`).
-- **Ukuran Berkas**: Maksimal `10 MB` dan bukan berkas kosong (`> 0 Byte`).
-- **Pencahayaan**: Hindari pantulan kilat lampu kamera (*flash glare*) tepat di atas angka NIK atau nama.
-- **Orientasi**: Pastikan teks KTP terbaca horizontal dari kiri ke kanan (gunakan tombol rotasi 90° jika foto miring atau terbalik).
+### Prasyarat Sistem
+- **Node.js**: Versi `18.x` atau lebih baru (direkomendasikan versi LTS `20.x` atau `22.x`).
+- **Python**: Versi `3.10` hingga `3.12` (diperlukan untuk menjalankan backend RapidOCR; Python $\ge$ 3.13 belum didukung oleh *binary wheel* `rapidocr-onnxruntime`).
+- **Git**: Untuk kloning repositori.
 
 ---
 
-## Panduan Instalasi & Menjalankan Proyek
+### Langkah 1: Kloning Repositori & Instal Frontend
+Buka terminal dan unduh repositori proyek:
 
-### 1. Kloning dan Masuk ke Direktori Proyek
 ```bash
+git clone https://github.com/your-username/client-side-ocr.git
 cd client-side-ocr
-```
-
-### 2. Instalasi Dependensi
-```bash
 npm install
-# atau menggunakan bun:
-# bun install
 ```
 
-### 3. Menjalankan Server Development
+---
 
-#### Opsi A: Jalankan Frontend & Backend Sekaligus (Rekomendasi)
-Jalankan satu perintah tunggal untuk menyalakan frontend (Vite) dan backend (FastAPI) secara paralel di satu terminal:
-```bash
-npm run dev:all
-# atau:
-npm start
-```
-- **Frontend** aktif di: `http://localhost:5173`
-- **Backend** aktif di: `http://localhost:8000`
-- Menggunakan `concurrently` dengan manajemen port & *graceful shutdown* bersih (`Ctrl+C` akan menghentikan seluruh sub-proses tanpa port tertinggal).
-- Virtual environment Python (`backend/venv`) dan dependensi akan disiapkan secara otomatis jika belum ada (cross-platform macOS/Linux/Windows).
+### Langkah 2: Menyiapkan Python Backend
 
-#### Opsi B: Menjalankan Layanan Secara Terpisah
-- **Frontend saja (Vite):**
-  ```bash
-  npm run dev:frontend
-  # atau: npm run dev
-  ```
-- **Backend saja (FastAPI Uvicorn):**
-  ```bash
-  npm run dev:backend
-  ```
-  *Backend menyediakan endpoint:*
-  - `GET /api/health`: Health-check status koneksi server.
-  - `POST /api/v1/ocr/extract-ktp`: Endpoint ekstraksi teks e-KTP & bounding box berbasis RapidOCR.
+Masuk ke folder `backend`, buat *virtual environment*, dan instal dependensi yang diperlukan:
 
-Manual setup backend (opsional/alternatif):
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate # di Windows: venv\Scripts\activate
+python -m venv venv
+
+# Aktifkan virtual environment:
+# Pengguna macOS / Linux:
+source venv/bin/activate
+
+# Pengguna Windows (Command Prompt / PowerShell):
+# venv\Scripts\activate
+
+# Instal dependensi Python
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-### 4. Menjalankan Pengujian Unit (Unit Tests)
-Proyek ini dilengkapi dengan rangkaian pengujian unit menggunakan **Vitest** untuk menguji akurasi regex parser, fungsi koreksi digit OCR, dan validator berkas:
-```bash
-npm test
-```
 
-### 5. Menjalankan Pengujian End-to-End (Playwright E2E)
-Rangkaian pengujian otomatis menyeluruh mencakup validasi keamanan berkas negatif, interaktivitas kanvas & slider, alur OCR & pemetaan form JSON, serta audit anti-memory leak (*zero ObjectURL leak*):
-```bash
-# Menjalankan seluruh skenario E2E di browser Chromium (headless mode)
-npm run test:e2e
-
-# Menjalankan dengan antarmuka interaktif Playwright UI
-npm run test:e2e:ui
-
-# Menjalankan uji integrasi model neural network WASM riil secara lokal:
-TEST_REAL_OCR=true npm run test:e2e
-```
-
-### 6. Pemeriksaan Tipe TypeScript & Linter
-```bash
-# Validasi tipe data tanpa emit (strict mode)
-npx tsc --noEmit
-
-# Pemeriksaan linter cepat dengan Oxlint
-npm run lint
-```
-
-### 7. Build Produksi & Preview
-```bash
-# Kompilasi aplikasi ke bundle produksi (dist/)
-npm run build
-
-# Menjalankan server pratinjau hasil build produksi
-npm run preview
+# Kembali ke root direktori proyek
+cd ..
 ```
 
 ---
 
-## Cara Penggunaan Aplikasi
+### Langkah 3: Menjalankan Aplikasi (1 Command untuk Frontend + Backend)
 
-1. **Memuat Gambar KTP**:
-   - Klik area unggah berkas atau seret foto KTP ke dalam kotak dropzone.
-   - Tersedia tombol **"Muat Sampel KTP Demo"** untuk menguji langsung seluruh fitur tanpa perlu mengunggah foto kartu identitas pribadi.
-2. **Koreksi Rotasi & Pilihan 4 Mode Preprocessing**:
-   - Jika foto terbalik atau miring, klik tombol **Putar 90° searah jarum jam** atau **berlawanan arah jarum jam**.
-   - Pilih dari **4 Mode Preprocessing** sesuai kondisi foto:
-     1. **Enhanced Grayscale / Soft Contrast (DEFAULT - Rekomendasi)**: Menggunakan formula grayscale khusus peredam cyan e-KTP (`0.05R + 0.45G + 0.50B`) dengan soft contrast stretching (`1.25x`). Menghindari binarisasi kasar agar tepi huruf tetap anti-aliased untuk neural network LSTM Tesseract.
-     2. **Original Color (Downscaled)**: Citra warna asli kamera tanpa manipulasi kanvas (skala proporsional maks 1600px).
-     3. **Adaptive Local Threshold (Bradley-Roth)**: Binarisasi adaptif berbasis Integral Image (`O(1)` per piksel) dengan window lokal (default 31px) dan sensitivitas `T` (default 15%). Menghilangkan bayangan tanpa menggelapkan separuh KTP.
-     4. **Manual Global Threshold**: Binarisasi hitam-putih tegas klasik dengan slider threshold interaktif (80 - 200).
-   - **Smart Auto-Fallback**: Saat menggunakan mode default (Enhanced Grayscale), jika NIK tidak valid atau confidence < 65%, sistem otomatis mencoba fallback ke *Original Color* atau *Adaptive Local Threshold* dan memilih hasil dengan akurasi tertinggi.
-3. **Eksekusi OCR**:
-   - Klik tombol **"Ekstrak Teks & Data KTP dengan OCR (Tesseract.js)"**.
-   - Pantau indikator progres real-time (inisialisasi WASM -> unduh traineddata -> analisis teks 0-100%).
-4. **Analisis Hasil & Koreksi Formulir**:
-   - **Panel 2 (Hasil JSON & Raw Text)**: Menampilkan metadata durasi proses (ms), skor confidence rata-rata (%), status keabsahan NIK 16 digit, tombol **Salin JSON**, dan tab untuk melihat teks mentah OCR.
-   - **Panel 3 (Simulasi Auto-Fill Form)**: Kolom formulir akan otomatis terisi. Field yang memiliki skor keyakinan rendah atau NIK yang belum memenuhi 16 digit otomatis ditandai dengan batas/label kuning agar pengguna dapat mengoreksi sebelum data disimpan atau disalin.
+Jalankan perintah berikut pada direktori utama proyek:
+
+```bash
+npm run dev:all
+```
+
+> **Catatan Otomatisasi**: Perintah `npm run dev:all` menggunakan paket `concurrently` untuk menyalakan frontend Vite dan backend FastAPI sekaligus. Skrip internal (`scripts/dev-backend.js`) secara cerdas akan mendeteksi instalasi Python, memverifikasi dependensi virtual environment, dan menjalankan server Uvicorn pada port `8000`.
+
+Jika Anda ingin menjalankan layanan secara terpisah di terminal yang berbeda:
+```bash
+# Terminal 1: Jalankan Frontend Vite
+npm run dev:frontend
+
+# Terminal 2: Jalankan Backend FastAPI
+npm run dev:backend
+```
 
 ---
 
-## Target Skema JSON
+### Langkah 4: Akses Aplikasi & Dokumentasi API
 
-Hasil parsing deterministik menghasilkan struktur JSON berikut:
+Setelah layanan aktif, buka browser Anda pada alamat berikut:
+
+| Layanan | URL | Keterangan |
+| :--- | :--- | :--- |
+| **Aplikasi Antarmuka (Frontend)** | [http://localhost:5173](http://localhost:5173) | Portal OcrCraft Studio & Sandbox Demo |
+| **RapidOCR Extraction API** | `POST http://localhost:8000/api/v1/ocr/extract-ktp` | Endpoint inferensi e-KTP multipart form |
+| **Interactive API Docs (Swagger UI)** | [http://localhost:8000/docs](http://localhost:8000/docs) | Eksplorasi interaktif endpoint FastAPI |
+| **Alternative API Docs (ReDoc)** | [http://localhost:8000/redoc](http://localhost:8000/redoc) | Dokumentasi teknis endpoint REST API |
+| **API Health Check** | [http://localhost:8000/api/health](http://localhost:8000/api/health) | Status kesiapan mesin RapidOCR |
+
+Contoh pengujian endpoint backend secara langsung via `curl`:
+```bash
+curl -X POST http://localhost:8000/api/v1/ocr/extract-ktp \
+  -F "file=@tests/fixtures/ktp-sample.jpg"
+```
+
+---
+
+## 5. Target Skema Data e-KTP (JSON Output Contract)
+
+Seluruh varian demo memetakan hasil ekstraksi ke dalam kontrak data standar berikut:
 
 ```json
 {
   "meta": {
-    "confidence": 88.5,
-    "processingTimeMs": 1420.75,
-    "nikValid": true
+    "confidence": 95,
+    "processingTimeMs": 142,
+    "nikValid": true,
+    "modeUsed": "enhanced-grayscale"
   },
   "data": {
-    "nik": "3171010101900001",
+    "nik": "3201012304950001",
     "nama": "BUDI SANTOSO",
-    "tempatLahir": "JAKARTA",
-    "tanggalLahir": "01-01-1990",
+    "tempatLahir": "BOGOR",
+    "tanggalLahir": "23-04-1995",
     "jenisKelamin": "LAKI-LAKI",
     "golonganDarah": "O",
-    "alamat": "JL. MERDEKA NO. 45",
-    "rtRw": "005/002",
-    "kelDesa": "GAMBIR",
-    "kecamatan": "GAMBIR",
+    "alamat": "JL. RAYA PAJAJARAN NO. 12",
+    "rtRw": "004/002",
+    "kelDesa": "BABAKAN",
+    "kecamatan": "BOGOR TENGAH",
     "agama": "ISLAM",
-    "statusPerkawinan": "KAWIN",
+    "statusPerkawinan": "BELUM KAWIN",
     "pekerjaan": "KARYAWAN SWASTA",
     "kewarganegaraan": "WNI"
   },
-  "rawText": "PROVINSI DKI JAKARTA\nKOTA JAKARTA PUSAT\nNIK : 3171010101900001\n..."
+  "rawText": "..."
 }
 ```
 
+> **Catatan Skema**: Kontrak data di atas sesuai dengan interface TypeScript `KtpExtractionResult` (`meta`, `data` bertipe `KtpData` 14-kolom, dan `rawText`). Pada RapidOCR backend, data juga dapat diakses dalam format `standardJson` (`RapidKtpStandardJson`) dengan nested object `alamat` (`jalan`, `rt_rw`, `kel_desa`, `kecamatan`).
+
 ---
 
-## Struktur Direktori Proyek
+## 6. Pengujian & Kualitas Kode (Testing & Quality Assurance)
 
-```
-client-side-ocr/
-├── index.html                   # Entry point HTML & viewport meta
-├── vite.config.ts               # Konfigurasi Vite & Tailwind CSS v4 plugin
-├── tsconfig.app.json            # Konfigurasi TypeScript ketat (strict: true)
-├── package.json                 # Skrip build, test, lint, dan dependensi
-└── src/
-    ├── main.tsx                 # Mounting React root
-    ├── App.tsx                  # Orkestrasi 3 panel, token sekuensial anti-race, & lifecycle cleanup
-    ├── index.css                # Konfigurasi Tailwind CSS v4 (@import "tailwindcss")
-    ├── types/
-    │   └── ktp.ts               # Interface TypeScript data KTP, skema JSON, dan status OCR
-    ├── utils/
-    │   ├── fileValidator.ts     # Validasi ganda MIME type, ekstensi, dan batas 10 MB
-    │   ├── imagePreprocessor.ts # Pipeline Canvas: Safe scaling, rotation, grayscale, binarization
-    │   ├── ktpParser.ts         # Koreksi OCR digit dan parser regex deterministik
-    │   ├── ktpParser.test.ts    # Rangkaian unit test (Vitest) untuk parser & validator
-    │   └── sampleKtpGenerator.ts# Generator kanvas e-KTP sintetis untuk demo instan
-    ├── hooks/
-    │   └── useKtpOcr.ts         # Hook siklus hidup Tesseract Web Worker & progress state
-    └── components/
-        ├── UploadPreviewPanel.tsx # Panel 1: Upload, rotasi, slider threshold, pratinjau Before/After
-        ├── JsonRawPanel.tsx       # Panel 2: Kartu JSON terformat, Confidence score, & Raw OCR text
-        └── AutoFillFormPanel.tsx  # Panel 3: Simulasi formulir interaktif dengan highlight peringatan
+Proyek ini menerapkan standar pengujian otomatis berlapis mencakup pengujian unit (unit testing) dan pengujian *end-to-end* (E2E).
+
+### Menjalankan Unit & Integration Test (Vitest)
+Unit test menguji parser reguler, validasi NIK (termasuk kasus batas tanggal lahir wanita $+40$), fungsi manipulasi kanvas, *spatial sorter*, dan persistensi BYOK:
+
+```bash
+# Menjalankan seluruh unit test suite
+npm run test
+
+# Menjalankan pengujian dalam mode watch interaktif
+npx vitest
 ```
 
----
+### Menjalankan Pengujian End-to-End (Playwright)
+E2E test memverifikasi alur interaksi pengguna, navigasi antar demo hub, rotasi kanvas, simulasi pengunggahan berkas, dan pengisian otomatis formulir:
 
-## Manajemen Memori Ketat (Anti-Memory Leak)
+```bash
+# Menjalankan seluruh pengujian E2E headless via package script atau Playwright CLI
+npm run test:e2e
+# atau: npx playwright test
+# Menjalankan pengujian E2E dengan tampilan UI interaktif
+npm run test:e2e:ui
+```
 
-Aplikasi menerapkan pola rekayasa perangkat lunak untuk memastikan tidak terjadi kebocoran memori pada browser pengguna:
+### Analisis Kode Statis & Type-Check
+```bash
+# Menjalankan linter performa tinggi (oxlint)
+npm run lint
 
-1. **Pencabutan ObjectURL (`URL.revokeObjectURL`)**:
-   Setiap kali pengguna mengunggah gambar baru, mereset form, atau saat komponen unmount, ObjectURL yang sebelumnya dibuat langsung dicabut untuk membebaskan alokasi memori blob peramban.
-2. **Pembersihan Offscreen Canvas**:
-   Setelah konversi `canvas.toDataURL()` dan `canvas.toBlob()` selesai, dimensi kanvas offscreen di-nol-kan (`canvas.width = 0; canvas.height = 0`) untuk membebaskan buffer alokasi piksel GPU/grafis.
-3. **Terminasi Tesseract Web Worker**:
-   Worker OCR ditutup secara bersih via `worker.terminate()` saat komponen unmount atau saat terjadi kegagalan fatal pada runtime WASM agar proses latar belakang tidak tertinggal.
-4. **Pencegahan Race Condition (Sequential Abort Token)**:
-   Pergeseran slider threshold secara cepat diproteksi menggunakan nomor urut sekuensial (`pipelineSeqRef`). Jika terdapat proses kanvas lama yang selesai terlambat, hasilnya otomatis dibuang dan memorinya segera dibersihkan.
-
----
-
-## Troubleshooting Umum
-
-### 1. Angka NIK Terbaca Kurang Akurat atau Kurang dari 16 Digit
-- **KTP Berlatar Belakang Gelap / Bayangan**: Turunkan nilai threshold slider ke rentang `100 - 120` agar garis angka hitam tidak terputus.
-- **KTP Pudar / Terlalu Terang**: Naikkan nilai threshold slider ke rentang `140 - 165` untuk mempertegas garis teks tipis.
-- **Motif Batik Hologram Masih Tampak**: Geser slider secara perlahan sampai latar belakang menjadi putih bersih pada panel *After*.
-
-### 2. Isu Kebijakan Keamanan Konten (CSP / CORS) pada Deployment Produksi
-Jika aplikasi di-deploy ke server produksi (seperti Nginx, Cloudflare Pages, atau AWS S3) dan Web Worker gagal dimuat:
-- Pastikan header `Content-Security-Policy` mengizinkan blob dan WebAssembly:
-  ```http
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://tessdata.projectnaptha.com; img-src 'self' blob: data:;
-  ```
-- Jika menggunakan fitur multi-threading Web Worker tingkat lanjut, tambahkan header isolasi lintas asal (*cross-origin isolation*):
-  ```http
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-  ```
+# Memvalidasi tipe data TypeScript & kompilasi produksi
+npm run build
+```
 
 ---
 
-## Lisensi
+## 7. Praktik Rekayasa & Proteksi Memori
 
-Proyek ini dirilis di bawah lisensi MIT. Bebas digunakan untuk keperluan pembelajaran, demonstrasi, maupun integrasi sistem e-KYC berbasis peramban.
+- **Pembersihan Resource Kanvas & Memori**: Seluruh objek Blob URL yang dihasilkan dari input file secara eksplisit dilepas menggunakan `URL.revokeObjectURL()` guna mencegah kebocoran memori browser (*memory leak*).
+- **Isolasi Worker**: Inisialisasi worker Tesseract dan ONNX dikelola dengan *lifecycle management* yang mematikan worker (`worker.terminate()`) saat komponen tidak lagi digunakan (*unmount*).
+- **Prinsip Pelindungan Data Pribadi (UU PDP)**: Pada varian v1 dan v3, seluruh proses inferensi berjalan secara luring pada memori lokal pengguna tanpa penyimpanan persisten atau transmisi berkas ke pihak ketiga.
+
+---
+
+## 8. Panduan Kontribusi & Lisensi
+
+### Kontribusi
+Kontribusi perbaikan bug, penambahan fitur ekstraksi data identitas, atau optimasi model sangat diterima:
+1. *Fork* repositori ini.
+2. Buat branch fitur baru (`git checkout -b feature/peningkatan-ocr`).
+3. Pastikan seluruh pengujian lolos (`npm run test && npm run lint`).
+4. Buat *commit* dengan format konvensional (`git commit -m 'feat: tambahkan validasi kode pos KTP'`).
+5. *Push* ke branch Anda (`git push origin feature/peningkatan-ocr`).
+6. Buka *Pull Request* baru.
+
+### Lisensi
+Didistribusikan di bawah lisensi terbuka **MIT License**. Lihat berkas [LICENSE](LICENSE) untuk informasi selengkapnya.
