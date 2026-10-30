@@ -43,6 +43,66 @@ export function correctOcrDigits(rawInput: string): string {
     .join('')
 }
 
+export const COMMON_KTP_KEYWORDS = [
+  'PROVINSI', 'KABUPATEN',
+  'SUMATERA', 'UTARA', 'SELATAN', 'BARAT', 'JAKARTA',
+  'MUHAMMAD', 'MOHAMMAD', 'HATTA', 'SIREGAR', 'NASUTION', 'HASIBUAN', 'BATUBARA',
+  'DUSUN', 'KELURAHAN', 'KECAMATAN', 'BUKIT', 'SELAMAT',
+  'BELUM', 'KAWIN', 'CERAI', 'HIDUP',
+  'PELAJAR', 'MAHASISWA', 'KARYAWAN', 'WIRASWASTA',
+  'PEREMPUAN',
+]
+
+export function splitGluedWords(word: string): string {
+  if (!word || word.length <= 5 || word.includes('/')) return word
+  const upper = word.toUpperCase()
+  for (const kw of COMMON_KTP_KEYWORDS) {
+    if (upper.startsWith(kw) && word.length >= kw.length + 3) {
+      const rest = word.slice(kw.length)
+      return word.slice(0, kw.length) + ' ' + splitGluedWords(rest)
+    }
+    if (upper.endsWith(kw) && word.length >= kw.length + 3) {
+      const front = word.slice(0, word.length - kw.length)
+      return splitGluedWords(front) + ' ' + word.slice(word.length - kw.length)
+    }
+  }
+  return word
+}
+
+export function recoverLexicalSpacing(text: string): string {
+  if (!text) return ''
+  let cleaned = text
+    .replace(/[\uFF1A：]/g, ':')
+    .replace(/[\uFF08（]/g, '(')
+    .replace(/[\uFF09）]/g, ')')
+    .replace(/[\uFF0F／]/g, '/')
+    .replace(/[\uFF0D－]/g, '-')
+    .replace(/[\uFF1B；]/g, ';')
+    .replace(/[\uFF0C，]/g, ',')
+    .replace(/[\u3002。]/g, '.')
+
+  cleaned = cleaned.replace(/\bDUSUN([IVX]+)([A-Za-z]+)/gi, 'DUSUN $1 $2')
+  cleaned = cleaned.replace(/\bDUSUN([IVX]+)\b/gi, 'DUSUN $1')
+  cleaned = cleaned.replace(/BELUMKAW[I1!l|]N/gi, 'BELUM KAWIN')
+  cleaned = cleaned.replace(/CERA[I1!l|]H[I1!l|]DUP/gi, 'CERAI HIDUP')
+  cleaned = cleaned.replace(/CERA[I1!l|]MAT[I1!l|]/gi, 'CERAI MATI')
+  cleaned = cleaned.replace(/LAK[I1!l|]LAK[I1!l|]/gi, 'LAKI-LAKI')
+  cleaned = cleaned.replace(/PELAJARMAHAS[I1!l|]SWA/gi, 'PELAJAR/MAHASISWA')
+  const tokens = cleaned.split(/\s+/)
+  const separated = tokens.map((token) => {
+    if (/^\d+$/.test(token) || /^\d{2}[-/.]\d{2}[-/.]\d{4}$/.test(token) || token.includes('/')) {
+      return token
+    }
+    return splitGluedWords(token)
+  })
+
+  return separated
+    .join(' ')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 /**
  * Membersihkan prefix label (seperti "Nama :", "NIK :", dll.) dari baris teks
  */
@@ -53,27 +113,122 @@ function cleanLabelPrefix(line: string, labelRegex: RegExp): string {
     /^[\s/]*(name|address|occupation|nationality|religion|sex|blood\s*type|place\s*[/.,\s]*(?:date)?\s*(?:of)?\s*birth|date\s*of\s*birth|place|marital\s*status)\b/i,
     ''
   )
-  return cleaned.replace(/^[:;.,\s\-/\\|=]+/, '').trim()
+  return cleaned.replace(/^[:;.,\s\-/\\|=\uFF1A\uFF1B]+/, '').trim()
+}
+
+/**
+ * Mencari kandidat NIK 16 digit terbaik dari string angka panjang berdasarkan aturan hukum NIK RI:
+ * - Kode provinsi: 11 s/d 94
+ * - Hari lahir: 01-31 (Pria) atau 41-71 (Wanita)
+ * - Bulan lahir: 01-12
+ * - Kesesuaian 6 digit tengah (DDMMYY) dengan tanggal lahir tertulis & gender
+ */
+export function findBest16DigitNik(
+  rawDigits: string,
+  writtenDob?: string,
+  gender?: string
+): string {
+  if (rawDigits.length === 16) return rawDigits
+  if (rawDigits.length < 16) return ''
+
+  let bestNik = rawDigits.slice(0, 16)
+  let bestScore = -Infinity
+
+  for (let i = 0; i <= rawDigits.length - 16; i++) {
+    const candidate = rawDigits.slice(i, i + 16)
+    const prov = parseInt(candidate.slice(0, 2), 10)
+    const day = parseInt(candidate.slice(6, 8), 10)
+    const month = parseInt(candidate.slice(8, 10), 10)
+    const year2 = candidate.slice(10, 12)
+    const dateSegment = candidate.slice(6, 12)
+
+    let score = 0
+    // Validitas kode provinsi Indonesia (11-94)
+    if (prov >= 11 && prov <= 94) {
+      score += 10
+    } else {
+      score -= 30
+    }
+
+    // Hari lahir sah: 01-31 (Laki-laki) atau 41-71 (Perempuan)
+    if ((day >= 1 && day <= 31) || (day >= 41 && day <= 71)) {
+      score += 15
+    } else {
+      score -= 50
+    }
+
+    // Bulan lahir sah: 01-12
+    if (month >= 1 && month <= 12) {
+      score += 20
+    } else {
+      score -= 100
+    }
+
+    // Korelasi dengan tanggal lahir tertulis (DD-MM-YYYY)
+    if (writtenDob) {
+      const match = writtenDob.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+      if (match) {
+        const wDay = parseInt(match[1], 10)
+        const wMonth = parseInt(match[2], 10)
+        const wYear2 = match[3].slice(-2)
+        const isFemale = gender === 'PEREMPUAN'
+        const expectedDayCode = isFemale ? wDay + 40 : wDay
+        const expectedDateSegment = `${String(expectedDayCode).padStart(2, '0')}${String(wMonth).padStart(2, '0')}${wYear2}`
+
+        // Pencocokan presisi 6 digit tanggal lahir di tengah NIK
+        if (dateSegment === expectedDateSegment) {
+          score += 100
+        } else {
+          if (day === expectedDayCode || day === wDay || day === wDay + 40) score += 30
+          if (month === wMonth) score += 30
+          if (year2 === wYear2) score += 30
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestNik = candidate
+    }
+  }
+
+  return bestNik
 }
 
 /**
  * Ekstraksi NIK (16 digit) dengan OCR post-correction
  */
-export function extractNik(lines: string[], fullText: string): string {
+export function extractNik(
+  lines: string[],
+  fullText: string,
+  writtenDob?: string,
+  gender?: string
+): string {
   // 1. Coba cari baris yang memuat kata kunci NIK (termasuk variasi OCR: MK, M1K, N1K, N!K)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (/\b(N[I!|1lL]K|N1K|MK|M1K)\b/i.test(line)) {
-      // Ambil sisa teks setelah label NIK
-      const afterLabel = line.replace(/.*?\b(N[I!|1lL]K|N1K|MK|M1K)\b[:;\s=5]*/i, '').trim()
+      // Ambil substring SETELAH pemisah ':' / '：' / ';' terakhir jika ada
+      // sehingga artefak digit sebelum titik dua (seperti '3:' atau '1:') terpotong
+      let afterLabel = ''
+      const lastColonIdx = Math.max(
+        line.lastIndexOf(':'),
+        line.lastIndexOf('\uFF1A'),
+        line.lastIndexOf(';')
+      )
+      if (lastColonIdx !== -1 && lastColonIdx < line.length - 1) {
+        afterLabel = line.slice(lastColonIdx + 1).trim()
+      } else {
+        afterLabel = line.replace(/.*?\b(N[I!|1lL]K|N1K|MK|M1K)\b[:;\s=5]*/i, '').trim()
+      }
+
       const candidate = correctOcrDigits(afterLabel).replace(/\D/g, '')
       if (candidate.length === 16) {
         return candidate
       }
       if (candidate.length > 16) {
-        const validMatch = candidate.match(/([1-9][0-9]{15})/)
-        if (validMatch) return validMatch[1]
-        return candidate.slice(0, 16)
+        const best = findBest16DigitNik(candidate, writtenDob, gender)
+        if (best.length === 16) return best
       }
 
       // Cek baris berikutnya jika baris ini hanya berisi label NIK
@@ -83,26 +238,25 @@ export function extractNik(lines: string[], fullText: string): string {
           return nextLineCandidate
         }
         if (nextLineCandidate.length > 16) {
-          const match = nextLineCandidate.match(/([1-9][0-9]{15})/)
-          if (match) return match[1]
-          return nextLineCandidate.slice(0, 16)
+          const best = findBest16DigitNik(nextLineCandidate, writtenDob, gender)
+          if (best.length === 16) return best
         }
       }
     }
   }
 
-  // 2. Fallback: Cari deretan angka/karakter 16 digit yang mungkin adalah NIK di seluruh teks
-  const allWords = fullText.split(/\s+/)
-  for (const word of allWords) {
-    const corrected = correctOcrDigits(word).replace(/\D/g, '')
-    if (corrected.length === 16) {
-      return corrected
-    }
+  // 2. Scan fullText untuk pola NIK dengan label fleksibel
+  const nikRegex = /(?:NIK|MK|M1K|N1K)[\s:=5]*([0-9IlODSZAGB?]{16,})/gi
+  let match: RegExpExecArray | null
+  while ((match = nikRegex.exec(fullText)) !== null) {
+    const corrected = correctOcrDigits(match[1]).replace(/\D/g, '')
+    if (corrected.length === 16) return corrected
     if (corrected.length > 16) {
-      const match = corrected.match(/([1-9][0-9]{15})/)
-      if (match) return match[1]
+      const best = findBest16DigitNik(corrected, writtenDob, gender)
+      if (best.length === 16) return best
     }
   }
+
   // 3. Fallback: Cari deretan 16 digit yang mungkin terpisah spasi atau tanda hubung
   const spacedNikMatch = correctOcrDigits(fullText).match(/\b(?:\d[\s-]?){15}\d\b/)
   if (spacedNikMatch) {
@@ -114,13 +268,12 @@ export function extractNik(lines: string[], fullText: string): string {
 
   // 4. Fallback: Cari deretan angka terpanjang >= 16 digit
   const textCorrected = correctOcrDigits(fullText).replace(/[^\d\s]/g, '')
-  const numbers = textCorrected.match(/\b\d{16}\b/)
+  const numbers = textCorrected.match(/\b\d{16,}\b/)
   if (numbers && numbers[0]) {
-    return numbers[0]
+    return findBest16DigitNik(numbers[0], writtenDob, gender)
   }
   return ''
 }
-
 /**
  * Ekstraksi Tempat dan Tanggal Lahir
  */
@@ -180,8 +333,23 @@ export function extractTempatTanggalLahir(
         }
       }
     }
+    // Bersihkan prefix sisa kata label 'lahir' yang redundan (baik terpisah spasi maupun menempel)
+    tempatLahir = tempatLahir
+      .replace(/^(?:tempat\s*[/.,\s]*)?(?:tgl|tanggal)?\s*lahir\s*[:;：.\s]*/i, '')
+      .trim()
+    if (/^lahir/i.test(tempatLahir) && tempatLahir.length > 5) {
+      tempatLahir = tempatLahir.replace(/^lahir\s*[:;：\uFF1A\uFF1B.,\s\-/|=]*/i, '').trim()
+    }
+    // Jika masih menempel (misal 'LahirBUKITSELAMAT')
+    if (tempatLahir.toUpperCase().startsWith('LAHIR') && tempatLahir.length > 5) {
+      tempatLahir = tempatLahir.slice(5).replace(/^[:;：\uFF1A\uFF1B.,\s\-/|=]+/, '').trim()
+    }
+    // Pulihkan spasi antar-kata leksikal
+    tempatLahir = recoverLexicalSpacing(tempatLahir)
+      .replace(/[^a-zA-Z\s]/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
   }
-
   return { tempatLahir, tanggalLahir }
 }
 
@@ -218,13 +386,36 @@ export function extractJenisKelaminGolDarah(
   let jenisKelamin = ''
   let golonganDarah = ''
 
-  // Deteksi jenis kelamin dari keseluruhan teks (mendukung OCR noise LAK1-LAK1, PEREMPU4N)
-  if (/PEREMPU[A4]N|WAN[I!|1l]TA/i.test(fullText)) {
-    jenisKelamin = 'PEREMPUAN'
-  } else if (/LAK[I!|1l][\s\-_]*LAK[I!|1l]|LAK[I!|1l]/i.test(fullText)) {
-    jenisKelamin = 'LAKI-LAKI'
+  // 1. Coba cari di baris yang secara spesifik memuat label Jenis Kelamin / Kelamin / Sex
+  for (const line of lines) {
+    if (/(jenis\s*k[eoa]lamin|k[eoa]lamin|keiamin|sex)\b/i.test(line)) {
+      if (/PEREMPU[A4]N|WAN[I!|1l]TA/i.test(line)) {
+        jenisKelamin = 'PEREMPUAN'
+        break
+      }
+      if (
+        /LAK[I!|1l]?[\s\-_/]*LAK[I!|1l]?|\bLAK[I!|1l]\b|\bLA[\s\-_]+LAK[I!|1l]?\b|\bPR[I1!l|]A\b/i.test(
+          line
+        )
+      ) {
+        jenisKelamin = 'LAKI-LAKI'
+        break
+      }
+    }
   }
 
+  // 2. Fallback scan dari fullText jika belum ditemukan di baris spesifik
+  if (!jenisKelamin) {
+    if (/PEREMPU[A4]N|WAN[I!|1l]TA/i.test(fullText)) {
+      jenisKelamin = 'PEREMPUAN'
+    } else if (
+      /LAK[I!|1l]?[\s\-_/]*LAK[I!|1l]?|\bLAK[I!|1l]\b|\bLA[\s\-_]+LAK[I!|1l]?\b|\bPR[I1!l|]A\b/i.test(
+        fullText
+      )
+    ) {
+      jenisKelamin = 'LAKI-LAKI'
+    }
+  }
   // Deteksi Golongan Darah (AB harus dievaluasi sebelum [ABO0])
   const golMatch = fullText.match(
     /(?:gol\.?\s*darah|darah)\s*[:;\s]*(AB|[ABO0]|-)(?!\w)/i
@@ -338,19 +529,25 @@ export function extractAgama(lines: string[], fullText: string): string {
  */
 export function extractStatusPerkawinan(lines: string[], fullText: string): string {
   const statusPatterns: Array<{ name: string; pattern: RegExp }> = [
-    { name: 'BELUM KAWIN', pattern: /\bBELUM\s+K[A4]W[I1!l|]N\b/i },
+    { name: 'BELUM KAWIN', pattern: /\bBELUM\s*K[A4]W[I1!l|]N\b/i },
     { name: 'KAWIN', pattern: /\bK[A4]W[I1!l|]N\b/i },
-    { name: 'CERAI HIDUP', pattern: /\bCERA[I1!l|]\s+H[I1!l|]DUP\b/i },
-    { name: 'CERAI MATI', pattern: /\bCERA[I1!l|]\s+MAT[I1!l|]\b/i },
+    { name: 'CERAI HIDUP', pattern: /\bCERA[I1!l|]\s*H[I1!l|]DUP\b/i },
+    { name: 'CERAI MATI', pattern: /\bCERA[I1!l|]\s*MAT[I1!l|]\b/i },
   ]
 
   for (const line of lines) {
     if (/status\s*perkawinan/i.test(line)) {
-      const val = cleanLabelPrefix(line, /.*?status\s*perkawinan/i)
+      let val = cleanLabelPrefix(line, /.*?status\s*perkawinan/i)
+      if (!val) continue
+      val = val.replace(/^[:;：\uFF1A\uFF1B.,\s\-/|=]+/, '').trim()
+      // Hapus tanggal terbit atau angka di ujung (misal '07-08-2012' yang bocor)
+      val = val.replace(/\s*\d{2}[-/.]\d{2}[-/.]\d{4}.*$/, '').trim()
       for (const st of statusPatterns) {
-        if (st.pattern.test(val)) return st.name
+        if (st.pattern.test(val)) {
+          return st.name
+        }
       }
-      if (val) return val.toUpperCase()
+      return val.toUpperCase()
     }
   }
 
@@ -396,6 +593,7 @@ export function extractNama(lines: string[]): string {
       if (!val && i + 1 < lines.length) {
         val = lines[i + 1].trim()
       }
+      val = val.replace(/^[:;：\uFF1A\uFF1B.,\s\-/|=]+/, '').trim()
       // Hapus karakter non-huruf yang bukan spasi
       val = val.replace(/[^a-zA-Z\s.',-]/g, '').trim()
       if (val.length > 2) {
@@ -416,25 +614,29 @@ export function extractNama(lines: string[]): string {
 export function extractAlamat(lines: string[]): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (/\balamat\b/i.test(line)) {
-      let val = cleanLabelPrefix(line, /.*?\balamat\b/i).replace(/[:;]+/, '').trim()
+    if (/\b(a[l1!|i]?amat|aamat|alarnat|alanat|aiamat)\b/i.test(line)) {
+      let val = cleanLabelPrefix(line, /.*?\b(a[l1!|i]?amat|aamat|alarnat|alanat|aiamat)\b/i)
+        .replace(/^[:;：\uFF1A\uFF1B.,\s\-/|=]+/, '')
+        .trim()
       if (!val && i + 1 < lines.length) {
         val = lines[i + 1].trim()
         i++
       }
 
       // Periksa apakah baris berikutnya adalah kelanjutan alamat (bukan label KTP baru)
-      if (i + 1 < lines.length) {
+      while (i + 1 < lines.length) {
         const nextLine = lines[i + 1].trim()
         const isNextLabel =
           /\b(RT|RW|Kel|Desa|Kecamatan|Kec\b|Agama|Status|Pekerjaan|Kewarganegaraan|NIK|Nama|Tempat|Jenis)\b/i.test(
             nextLine
           )
-        if (!isNextLabel && nextLine.length > 0 && nextLine.length < 50) {
+        if (!isNextLabel && nextLine.length > 0 && nextLine.length < 60) {
           val = `${val} ${nextLine}`.trim()
+          i++
+        } else {
+          break
         }
       }
-
       return val.toUpperCase()
     }
   }
@@ -457,7 +659,8 @@ export function extractFieldByKeyword(
         if (!val && i + 1 < lines.length) {
           val = lines[i + 1].trim()
         }
-        val = val.replace(/[:;]+/, '').trim()
+        val = val.replace(/^[:;：\uFF1A\uFF1B.,\s\-/|=]+/, '').trim()
+        val = recoverLexicalSpacing(val)
         return val.toUpperCase()
       }
     }
@@ -542,7 +745,13 @@ export function crossValidateNikAndDate(
         const tMonth = parseInt(tMatch[2], 10)
         const tYear2 = tMatch[3].slice(-2)
 
-        const isFemale = reconciledJenisKelamin === 'PEREMPUAN' || isFemaleByNik
+        // Kunci mutlak jenis kelamin: jika sudah terdeteksi LAKI-LAKI / PEREMPUAN, jangan pernah ditimpa oleh NIK!
+        const isFemale =
+          reconciledJenisKelamin === 'PEREMPUAN'
+            ? true
+            : reconciledJenisKelamin === 'LAKI-LAKI'
+              ? false
+              : isFemaleByNik
         const expectedDayCode = isFemale ? tDay + 40 : tDay
         const expectedDateCode = `${String(expectedDayCode).padStart(2, '0')}${String(tMonth).padStart(2, '0')}${tYear2}`
         const nikDateCode = reconciledNik.slice(6, 12)
@@ -714,18 +923,17 @@ export function parseKtpText(
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
 
-  // 1. Ekstraksi NIK
-  const nik = extractNik(lines, normalizedRaw)
-
-  // 2. Ekstraksi Nama
-  const nama = extractNama(lines)
-
-  // 3. Ekstraksi Tempat & Tanggal Lahir
+  // 1. Ekstraksi Tempat & Tanggal Lahir (didahulukan untuk membimbing skor pemilihan NIK)
   const { tempatLahir, tanggalLahir } = extractTempatTanggalLahir(lines, normalizedRaw)
 
-  // 4. Ekstraksi Jenis Kelamin & Golongan Darah
+  // 2. Ekstraksi Jenis Kelamin & Golongan Darah (didahulukan sebelum NIK untuk mengunci gender)
   const { jenisKelamin, golonganDarah } = extractJenisKelaminGolDarah(lines, normalizedRaw)
 
+  // 3. Ekstraksi NIK dengan parameter tanggal lahir dan jenis kelamin
+  const nik = extractNik(lines, normalizedRaw, tanggalLahir, jenisKelamin)
+
+  // 4. Ekstraksi Nama
+  const nama = extractNama(lines)
   // 5. Ekstraksi Alamat
   const alamat = extractAlamat(lines)
 
@@ -735,8 +943,14 @@ export function parseKtpText(
   // 7. Ekstraksi Kel/Desa
   const kelDesa = extractFieldByKeyword(
     lines,
-    [/kelurahan\s*[/&]?\s*desa/i, /kel[/.\s]*desa/i, /\bdesa\b/i, /\bkelurahan\b/i],
-    /.*?(kelurahan\s*[/&]?\s*desa|kel[/.\s]*desa|desa|kelurahan)/i
+    [
+      /kelurahan\s*[/&]?\s*desa/i,
+      /kel[/.\s]*desa/i,
+      /ke[il1!|]\s*[/&.\s]*desa/i,
+      /\bdesa\b/i,
+      /\bkelurahan\b/i,
+    ],
+    /.*?(kelurahan\s*[/&]?\s*desa|kel[/.\s]*desa|ke[il1!|]\s*[/&.\s]*desa|desa|kelurahan)/i
   )
 
   // 8. Ekstraksi Kecamatan

@@ -88,6 +88,9 @@ export default defineConfig({
     tailwindcss(),
     byokProxyPlugin(),
   ],
+  optimizeDeps: {
+    exclude: ['onnxruntime-web'],
+  },
   test: {
     include: ['src/**/*.test.ts'],
     exclude: ['tests/**', 'node_modules/**'],

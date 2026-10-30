@@ -31,20 +31,21 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     await expect(tesseractCard).toContainText('v1.0')
     await expect(tesseractCard).toContainText('Buka Workspace Demo')
 
-    // 3. Verifikasi kartu versi eksperimental / roadmap (Coming Soon)
-    const onnxCard = page.getByTestId('demo-card-onnx-web-runtime')
-    await expect(onnxCard).toBeVisible()
-    await expect(onnxCard).toContainText('Edge Neural ONNX Engine')
-    await expect(onnxCard).toContainText('Coming Soon')
-    await expect(onnxCard).toHaveAttribute('aria-disabled', 'true')
+    // 3. Verifikasi kartu versi PaddleOCR ONNX (Local Neural Engine)
+    const paddleCard = page.getByTestId('demo-card-paddleocr-onnx')
+    await expect(paddleCard).toBeVisible()
+    await expect(paddleCard).toContainText('PaddleOCR ONNX (Local Neural Engine)')
+    await expect(paddleCard).toContainText('Baru / Local Neural')
+    await expect(paddleCard).toContainText('v2.1')
+    await expect(paddleCard).toContainText('Buka Workspace Demo')
 
+    // 4. Verifikasi kartu versi roadmap (Roadmap)
     const hybridCard = page.getByTestId('demo-card-serverless-hybrid-gateway')
     await expect(hybridCard).toBeVisible()
     await expect(hybridCard).toContainText('Serverless Hybrid Gateway')
     await expect(hybridCard).toContainText('Roadmap')
     await expect(hybridCard).toHaveAttribute('aria-disabled', 'true')
   })
-
   test('2. Transisi Masuk ke Workspace: membuka layout 3-kolom modern', async ({
     page,
   }) => {
@@ -105,5 +106,20 @@ test.describe('OCR Demo Hub & Navigation Flow E2E Suite', () => {
     // 7. Masuk kembali ke workspace, pastikan state kanvas telah bersih (fresh state)
     await page.getByTestId('demo-card-client-side-tesseract').click()
     await expect(page.getByText('Kanvas Visual Belum Tersedia')).toBeVisible()
+  })
+
+  test('4. Navigasi Masuk & Keluar PaddleOCR Workspace', async ({ page }) => {
+    await page.goto('/')
+    const paddleCard = page.getByTestId('demo-card-paddleocr-onnx')
+    await paddleCard.click()
+
+    // Verifikasi masuk ke Workspace PaddleOCR
+    await expect(page.getByText('PaddleOCR ONNX (Local Neural Engine)')).toBeVisible()
+    await expect(page.getByText('WASM SIMD')).toBeVisible()
+    await expect(page.getByText('WebGPU')).toBeVisible()
+
+    // Klik kembali ke hub
+    await page.getByTestId('back-to-hub-btn').click()
+    await expect(page.getByRole('heading', { name: /Eksplorasi Teknologi OCR/i })).toBeVisible()
   })
 })
