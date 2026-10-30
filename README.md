@@ -94,31 +94,41 @@ npm install
 ```
 
 ### 3. Menjalankan Server Development
+
+#### Opsi A: Jalankan Frontend & Backend Sekaligus (Rekomendasi)
+Jalankan satu perintah tunggal untuk menyalakan frontend (Vite) dan backend (FastAPI) secara paralel di satu terminal:
 ```bash
-npm run dev
+npm run dev:all
+# atau:
+npm start
 ```
-Aplikasi akan aktif di `http://localhost:5173`. Buka tautan tersebut di peramban Anda.
+- **Frontend** aktif di: `http://localhost:5173`
+- **Backend** aktif di: `http://localhost:8000`
+- Menggunakan `concurrently` dengan manajemen port & *graceful shutdown* bersih (`Ctrl+C` akan menghentikan seluruh sub-proses tanpa port tertinggal).
+- Virtual environment Python (`backend/venv`) dan dependensi akan disiapkan secara otomatis jika belum ada (cross-platform macOS/Linux/Windows).
 
-### 3b. Menjalankan Backend RapidOCR (FastAPI) — Demo 4
-Untuk menjalankan varian **RapidOCR Backend (FastAPI)**:
+#### Opsi B: Menjalankan Layanan Secara Terpisah
+- **Frontend saja (Vite):**
+  ```bash
+  npm run dev:frontend
+  # atau: npm run dev
+  ```
+- **Backend saja (FastAPI Uvicorn):**
+  ```bash
+  npm run dev:backend
+  ```
+  *Backend menyediakan endpoint:*
+  - `GET /api/health`: Health-check status koneksi server.
+  - `POST /api/v1/ocr/extract-ktp`: Endpoint ekstraksi teks e-KTP & bounding box berbasis RapidOCR.
+
+Manual setup backend (opsional/alternatif):
 ```bash
-# 1. Masuk ke direktori backend
 cd backend
-
-# 2. Siapkan virtual environment Python (opsional namun disarankan)
 python3 -m venv venv
 source venv/bin/activate # di Windows: venv\Scripts\activate
-
-# 3. Instalasi dependensi Python
 pip install -r requirements.txt
-
-# 4. Jalankan server FastAPI uvicorn
 uvicorn main:app --reload --port 8000
 ```
-Backend akan aktif di `http://localhost:8000` dengan endpoint:
-- `GET /api/health`: Health-check status koneksi server.
-- `POST /api/v1/ocr/extract-ktp`: Endpoint ekstraksi teks e-KTP & bounding box berbasis RapidOCR.
-
 ### 4. Menjalankan Pengujian Unit (Unit Tests)
 Proyek ini dilengkapi dengan rangkaian pengujian unit menggunakan **Vitest** untuk menguji akurasi regex parser, fungsi koreksi digit OCR, dan validator berkas:
 ```bash
