@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { DemoHub } from './components/hub/DemoHub'
+import { ByokVisionWorkspace } from './components/workspace/byok/ByokVisionWorkspace'
 import { TesseractWorkspace } from './components/workspace/TesseractWorkspace'
 
 export type AppView = 'hub' | 'workspace'
 
 export function App() {
   const [currentView, setCurrentView] = useState<AppView>('hub')
-  const [_selectedDemoId, setSelectedDemoId] = useState<string>('client-side-tesseract')
+  const [selectedDemoId, setSelectedDemoId] = useState<string>('client-side-tesseract')
 
   const handleSelectDemo = (demoId: string) => {
     setSelectedDemoId(demoId)
@@ -21,6 +22,8 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {currentView === 'hub' ? (
         <DemoHub onSelectDemo={handleSelectDemo} />
+      ) : selectedDemoId === 'byok-vision-ocr' ? (
+        <ByokVisionWorkspace onBackToHub={handleBackToHub} />
       ) : (
         <TesseractWorkspace onBackToHub={handleBackToHub} />
       )}
