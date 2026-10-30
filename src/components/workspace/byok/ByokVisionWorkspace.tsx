@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowLeft,
   Check,
   CheckCircle2,
   Clock,
@@ -12,7 +11,6 @@ import {
   FileCheck2,
   FileText,
   Loader2,
-  RotateCcw,
   Scan,
   ShieldCheck,
   Sliders,
@@ -30,6 +28,7 @@ import { validateKtpImageFile } from '../../../utils/fileValidator'
 import { generateSampleKtpBlob } from '../../../utils/sampleKtpGenerator'
 import { AutoFillFormPanel } from '../../AutoFillFormPanel'
 import { ByokSettingsDrawer } from './ByokSettingsDrawer'
+import { WorkspaceHeader } from '../WorkspaceHeader'
 
 interface ByokVisionWorkspaceProps {
   onBackToHub: () => void
@@ -191,43 +190,22 @@ export function ByokVisionWorkspace({ onBackToHub }: ByokVisionWorkspaceProps) {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
       {/* 1. Header Studio Bar */}
-      <header className="h-13 shrink-0 border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md px-3 sm:px-5 flex items-center justify-between gap-3 z-30">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <button
-            type="button"
-            data-testid="back-to-hub-btn"
-            onClick={onBackToHub}
-            disabled={isProcessing}
-            aria-label="Kembali ke Demo Hub"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700/80 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-            <span>← Pilih Versi Demo</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-800 shrink-0 hidden sm:block" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-md bg-linear-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-xs shrink-0">
-              <Scan className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight shrink-0">
-              BYOK Vision OCR Studio
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 shrink-0 hidden md:inline-flex">
-              v2.0 Beta (OpenAI-Compatible)
-            </span>
-          </div>
-        </div>
-
-        {/* Right header controls */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Status Endpoint Pill */}
+      <WorkspaceHeader
+        onBackToHub={onBackToHub}
+        title="BYOK Vision OCR Studio"
+        subtitle="Bring Your Own Key Multimodal Vision API"
+        badgeText="v2.0 Beta (OpenAI-Compatible)"
+        badgeVariant="indigo"
+        iconGradient="from-indigo-500 via-purple-500 to-pink-500"
+        isProcessing={isProcessing}
+        canReset={Boolean(previewUrl || result)}
+        onResetAll={handleResetAll}
+        statusSlot={
           <button
             type="button"
             data-testid="byok-settings-btn"
             onClick={() => setIsSettingsOpen(true)}
-            className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-300 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 hover:border-slate-600 text-xs text-slate-300 transition-colors cursor-pointer shrink-0"
             title="Klik untuk konfigurasi Base URL & Model"
           >
             <span
@@ -246,7 +224,7 @@ export function ByokVisionWorkspace({ onBackToHub }: ByokVisionWorkspaceProps) {
               {config.modelId}
             </span>
             {activeProvider.isVerified && (
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hidden md:inline-flex items-center gap-1">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hidden md:inline-flex items-center gap-1">
                 <Check className="w-2.5 h-2.5" />
                 {activeProvider.lastLatencyMs ? `${activeProvider.lastLatencyMs}ms` : 'Verified'}
               </span>
@@ -256,20 +234,18 @@ export function ByokVisionWorkspace({ onBackToHub }: ByokVisionWorkspaceProps) {
                 Proxy
               </span>
             )}
-            <Sliders className="w-3.5 h-3.5 text-slate-400" />
+            <Sliders className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           </button>
-          <button
-            type="button"
-            onClick={handleResetAll}
-            disabled={isProcessing || (!previewUrl && !result)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700/80 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset</span>
-          </button>
-        </div>
-      </header>
-
+        }
+        helpTitle="Panduan BYOK Vision OCR Studio"
+        helpDescription="Hubungkan API Key multimodal Anda sendiri (OpenAI GPT-4o, OpenRouter, Google Gemini, Ollama/vLLM) untuk ekstraksi teks e-KTP presisi tinggi."
+        helpTips={[
+          'Kunci API Anda tersimpan 100% lokal di browser dan tidak pernah dikirim ke server aplikasi ini.',
+          'Gunakan tombol Status/Settings di header untuk mengganti model atau menguji koneksi endpoint.',
+          'Aktifkan opsi Local CORS Proxy jika Anda menggunakan model local Ollama/vLLM yang tidak mendukung browser CORS.',
+          'Gambar KTP secara otomatis dioptimalkan ukurannya (Canvas Pre-Flight) sebelum dikirim ke API vision.',
+        ]}
+      />
       {/* 2. Main Studio Workspace (Above-The-Fold Grid) */}
       <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4 overflow-hidden">
         {/* Left Panel: Upload, Pre-Flight Optimization & Controls (Col 5) */}

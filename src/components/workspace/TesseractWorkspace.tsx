@@ -422,9 +422,22 @@ export function TesseractWorkspace({ onBackToHub }: TesseractWorkspaceProps) {
       {/* Top Header dengan tombol kembali & branding */}
       <WorkspaceHeader
         onBackToHub={handleBackToHub}
+        title="Client-Side KTP OCR & JSON Extractor"
+        subtitle="Zero-Backend WASM & HTML5 Canvas API"
+        badgeText="v1.0 Stable (Zero-Backend)"
+        badgeVariant="emerald"
+        iconGradient="from-indigo-600 to-blue-500"
         onResetAll={handleResetAll}
         hasImage={Boolean(originalImageUrl)}
         isProcessing={isProcessing}
+        helpTitle="Panduan Client-Side Tesseract OCR"
+        helpDescription="Ekstraksi data e-KTP berjalan 100% di browser pengguna via WebAssembly tanpa mengirim gambar ke server mana pun."
+        helpTips={[
+          'Gunakan mode Chroma-Bleaching untuk foto dengan pantulan cahaya atau latar belakang biru/merah pekat.',
+          'Sesuaikan slider kontras dan adaptive thresholding bila huruf/angka NIK terlihat tipis atau pecah.',
+          'Ekstraksi memproses bounding box teks secara lokal dan memetakan field KTP lewat parser heuristik.',
+          'Semua memori Canvas dibersihkan saat Anda menekan tombol Reset atau kembali ke Hub.',
+        ]}
       />
 
       {/* Main Single-Viewport Body */}

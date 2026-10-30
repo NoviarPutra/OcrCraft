@@ -1,9 +1,4 @@
-import {
-  ArrowLeft,
-  RotateCcw,
-  Server,
-  Zap,
-} from 'lucide-react'
+import { Server, Zap } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KtpData } from '../../../types/ktp'
 import type { BoundingBox } from '../../../types/paddleOcr'
@@ -17,6 +12,7 @@ import {
   type ServerStatus,
 } from './RapidControlPanel'
 import { RapidResultsPanel } from './RapidResultsPanel'
+import { WorkspaceHeader } from '../WorkspaceHeader'
 
 interface RapidOcrWorkspaceProps {
   onBackToHub: () => void
@@ -250,56 +246,56 @@ export function RapidOcrWorkspace({ onBackToHub }: RapidOcrWorkspaceProps) {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-100">
       {/* Workspace Header */}
-      <header className="h-13 shrink-0 border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md px-3 sm:px-5 flex items-center justify-between gap-3 z-30">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <button
-            type="button"
-            data-testid="back-to-hub-btn"
-            onClick={onBackToHub}
-            disabled={isProcessing}
-            aria-label="Kembali ke Demo Hub"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700/80 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-hidden shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-            <span>← Pilih Versi Demo</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-800 shrink-0 hidden sm:block" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-md bg-linear-to-tr from-cyan-600 to-teal-500 flex items-center justify-center text-white shadow-xs shrink-0">
-              <Zap className="w-3.5 h-3.5" />
+      <WorkspaceHeader
+        onBackToHub={onBackToHub}
+        title="RapidOCR Backend (FastAPI)"
+        subtitle="High-Speed ONNX C++ Pipeline with Sub-150ms Profile"
+        badgeText="High-Speed API"
+        badgeVariant="cyan"
+        icon={<Zap className="w-3.5 h-3.5" />}
+        iconGradient="from-cyan-600 to-teal-500"
+        isProcessing={isProcessing}
+        canReset={Boolean(imageUrl)}
+        onResetAll={handleResetAll}
+        statusSlot={
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs">
+              <Server className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-[11px] font-medium">FastAPI + C++ ONNX</span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight shrink-0">
-              RapidOCR Backend (FastAPI)
-            </span>
-            <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
-              High-Speed API
-            </span>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs">
-            <Server className="w-3.5 h-3.5" />
-            <span>FastAPI + C++ ONNXRuntime</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  serverStatus === 'online'
+                    ? 'bg-emerald-400'
+                    : serverStatus === 'checking'
+                      ? 'bg-amber-400 animate-pulse'
+                      : 'bg-rose-400'
+                }`}
+              />
+              <span className="text-slate-300 font-medium hidden sm:inline text-[11px]">
+                {serverStatus === 'online'
+                  ? 'Backend Live'
+                  : serverStatus === 'checking'
+                    ? 'Menghubungkan...'
+                    : 'Backend Offline'}
+              </span>
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleResetAll}
-            disabled={isProcessing || !imageUrl}
-            title="Reset Workspace"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset</span>
-          </button>
-        </div>
-      </header>
+        }
+        helpTitle="Panduan RapidOCR Backend Studio"
+        helpDescription="Microservice ekstraksi e-KTP berbasis Python FastAPI dengan engine RapidOCR (C++ ONNXRuntime) untuk performa inferensi berkecepatan tinggi."
+        helpTips={[
+          'Pastikan backend lokal berjalan di http://localhost:8000 via perintah npm run dev:all.',
+          'Endpoint menerima unggahan gambar multipart/form-data dan mengembalikan koordinat bounding box, confidence score, dan teks hasil ekstraksi.',
+          'Sistem secara otomatis mengoreksi kesalahan ketik angka/huruf umum pada nomor NIK dan memvalidasi tanggal lahir.',
+          'Visualisasi bounding box interaktif memetakan setiap kata langsung pada canvas e-KTP.',
+        ]}
+      />
 
       {/* 3-Column Single Screen Viewport Container */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-3 p-3 overflow-hidden h-[calc(100vh-3.25rem)]">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-3 overflow-hidden">
         {/* Column 1: Control & API Panel */}
         <RapidControlPanel
           onImageSelected={handleImageSelected}

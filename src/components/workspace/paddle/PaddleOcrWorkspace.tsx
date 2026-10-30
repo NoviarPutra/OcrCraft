@@ -1,10 +1,4 @@
-import {
-  ArrowLeft,
-  RotateCcw,
-  Scan,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KtpData } from '../../../types/ktp'
 import type {
@@ -25,6 +19,7 @@ import { PaddleOcrEngine } from '../../../utils/paddleOcrEngine'
 import { InteractiveBoundingCanvas } from './InteractiveBoundingCanvas'
 import { PaddleControlPanel } from './PaddleControlPanel'
 import { PaddleResultsPanel } from './PaddleResultsPanel'
+import { WorkspaceHeader } from '../WorkspaceHeader'
 
 interface PaddleOcrWorkspaceProps {
   onBackToHub: () => void
@@ -320,57 +315,54 @@ export function PaddleOcrWorkspace({ onBackToHub }: PaddleOcrWorkspaceProps) {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-100">
       {/* Workspace Header */}
-      <header className="h-13 shrink-0 border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md px-3 sm:px-5 flex items-center justify-between gap-3 z-30">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <button
-            type="button"
-            data-testid="back-to-hub-btn"
-            onClick={onBackToHub}
-            disabled={isProcessing}
-            aria-label="Kembali ke Demo Hub"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700/80 hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-hidden shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-            <span>← Pilih Versi Demo</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-800 shrink-0 hidden sm:block" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-md bg-linear-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-xs shrink-0">
-              <Scan className="w-3.5 h-3.5" />
+      <WorkspaceHeader
+        onBackToHub={onBackToHub}
+        title="PaddleOCR ONNX (Local Neural Engine)"
+        subtitle="DBNet Detection & SVTR Recognition in Browser"
+        badgeText="v2.1 • Local AI"
+        badgeVariant="indigo"
+        iconGradient="from-indigo-600 to-blue-500"
+        isProcessing={isProcessing}
+        canReset={Boolean(imageUrl)}
+        onResetAll={handleResetAll}
+        statusSlot={
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-[11px] font-medium">100% In-Browser Privacy</span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight shrink-0">
-              PaddleOCR ONNX (Local Neural Engine)
-            </span>
-            <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
-              <Sparkles className="w-2.5 h-2.5" />
-              v2.1 Beta
-            </span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  modelStatus.allReady
+                    ? 'bg-emerald-400'
+                    : modelStatus.det.state === 'downloading' || modelStatus.rec.state === 'downloading'
+                      ? 'bg-blue-400 animate-pulse'
+                      : 'bg-amber-400'
+                }`}
+              />
+              <span className="text-slate-300 font-medium hidden sm:inline text-[11px]">
+                {modelStatus.allReady
+                  ? 'Neural Engine Ready'
+                  : modelStatus.det.state === 'downloading' || modelStatus.rec.state === 'downloading'
+                    ? 'Memuat Model...'
+                    : 'Model Pending'}
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>100% In-Browser Privacy</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetAll}
-            disabled={isProcessing || !imageUrl}
-            title="Reset Workspace"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset</span>
-          </button>
-        </div>
-      </header>
+        }
+        helpTitle="Panduan PaddleOCR ONNX Local Engine"
+        helpDescription="Ekstraksi deep learning multi-stage (DBNet text detection + SVTR recognition) dijalankan 100% di browser memanfaatkan ONNX Runtime Web dengan akselerasi WASM SIMD dan WebGPU."
+        helpTips={[
+          'Model deteksi dan rekognisi diunduh sekali lalu disimpan di browser (IndexedDB / Cache API).',
+          'Bounding box yang terdeteksi dapat diklik dan ditelusuri di canvas interaktif tengah.',
+          'Algoritma spatial sorting menyusun teks baris demi baris sebelum dipetakan ke field e-KTP.',
+          'Pilih provider WebGPU pada browser yang kompatibel untuk akselerasi hingga 3x lebih cepat dibanding WASM.',
+        ]}
+      />
 
       {/* 3-Column Single Screen Viewport Container */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-3 p-3 overflow-hidden h-[calc(100vh-3.25rem)]">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-3 overflow-hidden">
         {/* Left Column: Control Panel */}
         <PaddleControlPanel
           onImageSelected={handleImageSelected}
